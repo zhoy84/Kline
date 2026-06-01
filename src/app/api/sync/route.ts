@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { getCoins, getLatestOpenTime, insertKline } from "@/lib/db";
 
-const BINANCE_API = "https://api.binance.com/api/v3/klines";
+const BINANCE_PROXY = process.env.BINANCE_PROXY_URL || "";
+const BINANCE_DIRECT = "https://api.binance.com";
 const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS || "5");
 const DRAWDOWN_THRESHOLD = parseFloat(process.env.DRAWDOWN_THRESHOLD_PCT || "20");
 
@@ -14,7 +15,8 @@ function toDateStr(ms: number): string {
 }
 
 async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
-  const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
+  const base = BINANCE_PROXY || `${BINANCE_DIRECT}/api/v3/klines`;
+  const url = `${base}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
   let resp: Response;
   try {
     resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
