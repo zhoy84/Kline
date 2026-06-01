@@ -75,6 +75,20 @@ export default function KlineChart({ data }: Props) {
     candlestickSeries.setData(formatData());
     chart.timeScale().fitContent();
 
+    // Zoom to last ~400 candles for thicker candle rendering
+    const chartData = formatData();
+    candlestickSeries.setData(chartData);
+    chart.timeScale().fitContent();
+
+    // Zoom to last ~400 candles for thicker candle rendering
+    if (chartData.length > 400) {
+      const lastIdx = chartData.length - 1;
+      chart.timeScale().setVisibleRange({
+        from: chartData[lastIdx - 399].time as any,
+        to: chartData[lastIdx].time as any,
+      });
+    }
+
     // Resize observer
     resizeObserver.current = new ResizeObserver((entries) => {
       for (const entry of entries) {

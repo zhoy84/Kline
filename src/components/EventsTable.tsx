@@ -21,36 +21,24 @@ interface Props {
 function getEventLabel(ev: NotableEvent): string {
   if (ev.event_type === "ath") return "新高";
   if (ev.event_type === "atl") return "新低";
-  if (ev.direction === "UP") return "涨幅";
-  return "跌幅";
+  if (ev.change_pct == null) return ev.direction === "UP" ? "涨幅" : "跌幅";
+  const pct = Math.abs(ev.change_pct).toFixed(1);
+  return ev.direction === "UP" ? `涨${pct}%` : `跌${pct}%`;
 }
 
 function getEventColor(ev: NotableEvent): string {
   if (ev.event_type === "ath") return "text-green-400 bg-green-900/30 border-green-700";
   if (ev.event_type === "atl") return "text-red-400 bg-red-900/30 border-red-700";
-  if (ev.direction === "UP") return "text-emerald-400 bg-emerald-900/30 border-emerald-700";
+  if (ev.direction === "UP") return "text-cyan-400 bg-cyan-900/30 border-cyan-700";
   return "text-orange-400 bg-orange-900/30 border-orange-700";
 }
 
-/** Format a price value into display string */
 function fmtPrice(p: number | undefined | null): string {
   if (p == null) return "-";
   return "$" + p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Format change indicator for the selected coin's price cell */
-function changeSuffix(ev: NotableEvent): string {
-  if (ev.change_pct != null) {
-    const sign = ev.direction === "UP" ? "↑" : "↓";
-    return `${sign}${Math.abs(ev.change_pct).toFixed(1)}%`;
-  }
-  if (ev.event_type === "ath") return "↑新高";
-  if (ev.event_type === "atl") return "↓新低";
-  return "";
-}
-
 export default function EventsTable({ events, coins, selectedSymbol }: Props) {
-  // Order coins so the selected one is first
   const orderedCoins = useMemo(() => {
     const copy = [...coins];
     const idx = copy.findIndex((c) => c.symbol === selectedSymbol);
@@ -105,12 +93,8 @@ export default function EventsTable({ events, coins, selectedSymbol }: Props) {
                 </span>
               </td>
               {orderedCoins.map((c) => {
-                // The event's own coin: show price from `price` + change indicator
-                // Other coins: show price from `other_prices`
                 const isOwn = c.symbol === selectedSymbol;
                 const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
-                const indicator = isOwn ? changeSuffix(ev) : "";
-
                 return (
                   <td
                     key={c.symbol}
@@ -119,9 +103,6 @@ export default function EventsTable({ events, coins, selectedSymbol }: Props) {
                     }`}
                   >
                     {fmtPrice(price)}
-                    {indicator && (
-                      <span className="ml-1 text-xs">{indicator}</span>
-                    )}
                   </td>
                 );
               })}
