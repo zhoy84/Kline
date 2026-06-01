@@ -116,30 +116,52 @@ export function exportEventsAsHtml(
 <title>Kline Lab 事件导出</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f0f1a;color:#d1d5db;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:12px}
+body{background:#0f0f1a;color:#d1d5db;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5;min-height:100vh}
+header{position:sticky;top:0;z-index:10;border-bottom:1px solid #1f2937;background:rgba(26,26,46,0.5);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.header-inner{max-width:1280px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+h1{font-size:18px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header-right{display:flex;align-items:center;gap:8px}
+.badge{font-size:12px;color:#6b7280}
+.btn-export{font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid #4b5563;color:#d1d5db;background:transparent;cursor:pointer;text-decoration:none}
+.btn-export:hover{background:#374151}
+main{max-width:1280px;margin:0 auto;padding:16px}
+.page-title{font-size:14px;font-weight:600;color:#d1d5db;margin-bottom:12px}
+.page-title span{color:#6b7280;font-size:12px;margin-left:8px}
 .wrap{background:#1a1a2e;border:1px solid #1f2937;border-radius:8px;overflow:hidden}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th{text-align:left;padding:8px 6px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;padding:10px 8px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;white-space:nowrap}
 th.sel{color:#60a5fa}
 tr{border-bottom:1px solid #1f2937;transition:background .15s}
 tr:hover{background:rgba(31,41,55,0.5)}
-td{padding:8px 6px}
-.dt{color:#d1d5db;white-space:nowrap}
-.pr{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
-.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:500;border:1px solid}
+td{padding:10px 8px}
+.dt{color:#d1d5db;white-space:nowrap;font-size:15px}
+.pr{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:16px}
+.tag{display:inline-block;padding:3px 10px;border-radius:5px;font-size:13px;font-weight:500;border:1px solid}
 .tag-ath{color:#4ade80;border-color:#15803d;background:rgba(20,83,45,0.3)}
 .tag-atl{color:#f87171;border-color:#b91c1c;background:rgba(127,29,29,0.3)}
 .tag-up{color:#22d3ee;border-color:#0e7490;background:rgba(22,78,99,0.3)}
 .tag-down{color:#fb923c;border-color:#c2410c;background:rgba(124,45,18,0.3)}
+@media(max-width:640px){body{font-size:15px}td,th{padding:8px 6px}table{font-size:14px}.pr{font-size:15px}.tag{font-size:12px;padding:2px 8px}}
 </style>
 </head>
 <body>
+<header>
+<div class="header-inner">
+<h1>Kline Lab</h1>
+<div class="header-right">
+<span class="badge">${new Date().toISOString().split("T")[0]}</span>
+</div>
+</div>
+</header>
+<main>
+<div class="page-title">事件记录 <span>(${events.length})</span></div>
 <div class="wrap">
 <table>
 <thead><tr><th>日期</th><th>事件</th>${ths}</tr></thead>
 <tbody>${tbody}</tbody>
 </table>
 </div>
+</main>
 </body>
 </html>`;
 }
