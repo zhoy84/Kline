@@ -14,9 +14,9 @@ function toDateStr(ms: number): string {
 }
 
 async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
-  const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=5`;
+  const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (resp.ok) {
       const json: Array<Array<number | string>> = await resp.json();
       return json.map(k => [
