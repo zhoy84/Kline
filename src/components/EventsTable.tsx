@@ -33,16 +33,68 @@ function getEventColor(ev: NotableEvent): string {
   return "text-orange-400 bg-orange-900/30 border-orange-700";
 }
 
-function fmtPrice(p: number | undefined | null): string {
+function fmtPrice(p: number | undefined | null, symbol?: string): string {
   if (p == null) return "-";
-  const decimals = p >= 1000 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : 6;
-  return (
-    "$" +
-    p.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: decimals,
-    })
-  );
+  const base = symbol?.replace("USDT", "") ?? "";
+  const decimals = (() => {
+    if (base === "BTC" || base === "ETH") return 0;
+    if (base === "DOGE") return 5;
+    return p >= 1000 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : 6;
+  })();
+  return p.toLocaleString(undefined, {
+    minimumFractionDigits: Math.min(decimals, 2),
+    maximumFractionDigits: decimals,
+  });
+}
+
+function getPriceColor(symbol: string): string {
+  const base = symbol.replace("USDT", "");
+  if (base === "ETH") return "text-violet-300";
+  if (base === "DOGE") return "text-amber-300";
+  return "text-gray-500";
+}
+
+export function exportEventsAsText(
+  events: NotableEvent[],
+  coins: Array<{ symbol: string; name: string }>,
+  selectedSymbol: string
+): string {
+  const orderedCoins = [...coins];
+  const idx = orderedCoins.findIndex((c) => c.symbol === selectedSymbol);
+  if (idx > 0) {
+    const [item] = orderedCoins.splice(idx, 1);
+    orderedCoins.unshift(item);
+  }
+
+  const lines: string[] = [];
+  lines.push("=== Kline Lab 事件导出 ===");
+  lines.push(`导出时间: ${new Date().toISOString().split("T")[0]}`);
+  lines.push("");
+
+  for (const ev of events) {
+    const label =
+      ev.event_type === "ath"
+        ? "ATH 新高"
+        : ev.event_type === "atl"
+          ? "ATL 新低"
+          : ev.change_pct == null
+            ? ev.direction === "UP"
+              ? "涨幅"
+              : "跌幅"
+            : `${ev.direction === "UP" ? "涨" : "跌"}${Math.abs(ev.change_pct).toFixed(1)}%`;
+
+    lines.push(`[${ev.event_date}] ${label}`);
+    for (const c of orderedCoins) {
+      const isOwn = c.symbol === selectedSymbol;
+      const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
+      if (price != null) {
+        lines.push(`  ${c.symbol.replace("USDT", "")}: ${fmtPrice(price, c.symbol)}`);
+      }
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 export default function EventsTable({ events, coins, selectedSymbol }: Props) {
@@ -102,14 +154,13 @@ export default function EventsTable({ events, coins, selectedSymbol }: Props) {
               {orderedCoins.map((c) => {
                 const isOwn = c.symbol === selectedSymbol;
                 const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
+                const colorClass = isOwn ? "text-gray-200" : getPriceColor(c.symbol);
                 return (
                   <td
                     key={c.symbol}
-                    className={`py-2 px-1.5 text-right font-mono ${
-                      isOwn ? "text-gray-200" : "text-gray-500"
-                    }`}
+                    className={`py-2 px-1.5 text-right font-mono ${colorClass}`}
                   >
-                    {fmtPrice(price)}
+                    {fmtPrice(price, c.symbol)}
                   </td>
                 );
               })}

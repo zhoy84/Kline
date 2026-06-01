@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import CoinSelector from "@/components/CoinSelector";
-import EventsTable from "@/components/EventsTable";
+import EventsTable, { exportEventsAsText } from "@/components/EventsTable";
 import DrawdownConfig from "@/components/DrawdownConfig";
 
 const KlineChart = dynamic(() => import("@/components/KlineChart"), { ssr: false });
@@ -96,6 +96,20 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchData]);
 
+  // Export events as downloadable text file
+  const handleExport = useCallback(() => {
+    const text = exportEventsAsText(events, coins, selectedSymbol);
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kline-events-${selectedSymbol.replace("USDT", "")}-${new Date().toISOString().split("T")[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [events, coins, selectedSymbol]);
+
   // Recompute events with current threshold
   const handleRecompute = useCallback(async () => {
     setRecomputing(true);
@@ -160,13 +174,21 @@ export default function Home() {
                     历史事件记录
                     <span className="text-xs text-gray-500 ml-2">({events.length})</span>
                   </h2>
-                  <button
-                    onClick={handleRecompute}
-                    disabled={recomputing}
-                    className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white transition-colors"
-                  >
-                    {recomputing ? "计算中…" : "重新生成"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleExport}
+                      className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      导出
+                    </button>
+                    <button
+                      onClick={handleRecompute}
+                      disabled={recomputing}
+                      className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white transition-colors"
+                    >
+                      {recomputing ? "计算中…" : "重新生成"}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
