@@ -25,7 +25,7 @@ async function handleProxy(url) {
   const limit = url.searchParams.get("limit") || "1000";
   const startTime = url.searchParams.get("startTime");
 
-  // 尝试多个 Binance API 域名（主站被 451 时备选）
+  // 尝试多个 Binance API 域名
   const hosts = ["api.binance.com", "api1.binance.com", "api2.binance.com", "api3.binance.com"];
   let resp;
   for (const host of hosts) {

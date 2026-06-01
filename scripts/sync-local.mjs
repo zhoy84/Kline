@@ -30,25 +30,24 @@ if (existsSync(join(ROOT, ".env.local"))) {
   }
 }
 
-const BINANCE_API = "https://api.binance.com/api/v3/klines";
+const SYMBOL_MAP = { BTCUSDT: "BTC", ETHUSDT: "ETH", DOGEUSDT: "DOGE" };
+const CC_URL = "https://min-api.cryptocompare.com/data/v2/histoday";
 
-async function fetchKlines(symbol, startTimeMs) {
-  const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTimeMs}&limit=1000`;
+async function fetchKlines(symbol) {
+  const fsym = SYMBOL_MAP[symbol];
+  if (!fsym) throw new Error(`Unsupported symbol: ${symbol}`);
+  const url = `${CC_URL}?fsym=${fsym}&tsym=USDT&limit=2000`;
   const resp = await fetch(url);
-  if (!resp.ok) {
-    throw new Error(`Binance ${symbol}: ${resp.status} ${resp.statusText}`);
-  }
+  if (!resp.ok) throw new Error(`CryptoCompare ${symbol}: ${resp.status}`);
   const json = await resp.json();
-  return json.map((k) => ({
-    open_time: k[0],             // ms
-    open: parseFloat(k[1]),
-    high: parseFloat(k[2]),
-    low: parseFloat(k[3]),
-    close: parseFloat(k[4]),
-    volume: parseFloat(k[5]),
-    close_time: k[6],
-    quote_volume: parseFloat(k[7]),
-    trades: parseInt(k[8]),
+  if (json.Response !== "Success") throw new Error(`CryptoCompare ${symbol}: ${json.Message}`);
+  return json.Data.Data.map((k) => ({
+    open_time: k.time * 1000,    // CryptoCompare seconds → ms
+    open: k.open,
+    high: k.high,
+    low: k.low,
+    close: k.close,
+    volume: k.volumefrom,
   }));
 }
 
@@ -65,15 +64,10 @@ async function main() {
       ORDER BY open_time DESC LIMIT 1
     `;
     const latest = rows.length > 0 ? Number(rows[0].open_time) : 0;
+    console.log(`\n${coin.symbol}: latest=${latest ? new Date(latest).toISOString().split("T")[0] : "none"}`);
 
-    const startMs = latest > 0
-      ? Math.max(latest - 2 * 86400000, new Date("2025-01-01").getTime())
-      : new Date("2020-01-01").getTime();
-
-    console.log(`\n${coin.symbol}: latest=${latest ? new Date(latest).toISOString().split("T")[0] : "none"}, fetch from ${new Date(startMs).toISOString().split("T")[0]}`);
-
-    const klines = await fetchKlines(coin.symbol, startMs);
-    console.log(`  Binance returned ${klines.length} candles`);
+    const klines = await fetchKlines(coin.symbol);
+    console.log(`  CryptoCompare returned ${klines.length} candles`);
 
     let inserted = 0;
     for (const k of klines) {
@@ -81,21 +75,16 @@ async function main() {
         SELECT 1 FROM klines WHERE coin_id = ${coin.id} AND open_time = ${k.open_time}
       `;
       if (exists.rows.length > 0) {
-        // Update evolving candle
         await sql`
-          UPDATE klines SET
-            high = ${k.high}, low = ${k.low}, close = ${k.close},
-            volume = ${k.volume}, close_time = ${k.close_time},
-            quote_volume = ${k.quote_volume}, trades = ${k.trades}
+          UPDATE klines SET high = ${k.high}, low = ${k.low}, close = ${k.close}, volume = ${k.volume}
           WHERE coin_id = ${coin.id} AND open_time = ${k.open_time}
         `;
       } else {
         await sql`
-          INSERT INTO klines (coin_id, open_time, open, high, low, close, volume, close_time, quote_volume, trades)
-          VALUES (${coin.id}, ${k.open_time}, ${k.open}, ${k.high}, ${k.low}, ${k.close}, ${k.volume}, ${k.close_time}, ${k.quote_volume}, ${k.trades})
+          INSERT INTO klines (coin_id, open_time, open, high, low, close, volume)
+          VALUES (${coin.id}, ${k.open_time}, ${k.open}, ${k.high}, ${k.low}, ${k.close}, ${k.volume})
           ON CONFLICT (coin_id, open_time) DO UPDATE SET
-            high = EXCLUDED.high, low = EXCLUDED.low, close = EXCLUDED.close,
-            volume = EXCLUDED.volume
+            high = EXCLUDED.high, low = EXCLUDED.low, close = EXCLUDED.close
         `;
       }
       inserted++;

@@ -1,0 +1,18 @@
+Coins: BTCUSDT, ETHUSDT, DOGEUSDT
+
+BTCUSDT: latest=2026-06-01, fetch from 2026-05-30
+Sync failed: [TypeError: fetch failed] {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 162.125.32.12:443, 2001::d02b:aae7:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:2377:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:2343:35)
+      at process.processImmediate (node:internal/timers:504:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+Coins: BTCUSDT, ETHUSDT, DOGEUSDT
+
+BTCUSDT: latest=2026-06-01, fetch from 2026-05-30
+Sync failed: Error: Binance BTCUSDT: 451 
+    at fetchKlines (file:///D:/Work/github/Kline/scripts/sync-local.mjs:39:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async main (file:///D:/Work/github/Kline/scripts/sync-local.mjs:75:20)

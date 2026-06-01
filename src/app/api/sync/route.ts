@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { getCoins, getLatestOpenTime, insertKline } from "@/lib/db";
 
-const BINANCE_PROXY = process.env.BINANCE_PROXY_URL || "";
-const BINANCE_DIRECT = "https://api.binance.com";
 const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS || "5");
 const DRAWDOWN_THRESHOLD = parseFloat(process.env.DRAWDOWN_THRESHOLD_PCT || "20");
 
@@ -14,31 +12,43 @@ function toDateStr(ms: number): string {
   return new Date(ms).toISOString().split("T")[0];
 }
 
-async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
-  let base = BINANCE_PROXY || `${BINANCE_DIRECT}/api/v3/klines`;
-  if (base && !base.startsWith("http://") && !base.startsWith("https://")) {
-    base = `https://${base}`;
+// Coin => CryptoCompare fsym mapping
+const SYMBOL_MAP: Record<string, string> = {
+  BTCUSDT: "BTC",
+  ETHUSDT: "ETH",
+  DOGEUSDT: "DOGE",
+};
+
+async function fetchKlines(symbol: string, _startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
+  const fsym = SYMBOL_MAP[symbol];
+  if (!fsym) {
+    console.error(`Unsupported symbol: ${symbol}`);
+    return [];
   }
-  const url = `${base}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
+  const url = `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${fsym}&tsym=USDT&limit=2000`;
   let resp: Response;
   try {
     resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
   } catch (e) {
-    console.error(`Binance API ${symbol}: network error`, e);
+    console.error(`CryptoCompare ${symbol}: network error`, e);
     return [];
   }
   if (!resp.ok) {
-    console.error(`Binance API ${symbol}: ${resp.status} ${resp.statusText}`);
+    console.error(`CryptoCompare ${symbol}: ${resp.status} ${resp.statusText}`);
     return [];
   }
-  const json: Array<Array<number | string>> = await resp.json();
-  return json.map(k => [
-    Math.floor((k[0] as number) / 1000),
-    k[1] as string,
-    k[2] as string,
-    k[3] as string,
-    k[4] as string,
-    k[5] as string,
+  const json = await resp.json();
+  if (json.Response !== "Success") {
+    console.error(`CryptoCompare ${symbol}: API error`, json.Message);
+    return [];
+  }
+  return json.Data.Data.map((k: { time: number; open: number; high: number; low: number; close: number; volumefrom: number }) => [
+    k.time,           // seconds (matches existing format)
+    String(k.open),
+    String(k.high),
+    String(k.low),
+    String(k.close),
+    String(k.volumefrom),
   ]);
 }
 
@@ -197,13 +207,8 @@ async function runSync(): Promise<NextResponse> {
       const symbol = coin.symbol;
       const latest = await getLatestOpenTime(coin.id);
 
-      // Fetch from 2 days before latest to always get the current evolving candle
-      const startMs = latest
-        ? Math.max(latest - 2 * 86400000, new Date("2025-01-01").getTime())
-        : new Date("2020-01-01").getTime();
-
-      // Fetch new klines from Binance
-      const klines = await fetchKlines(symbol, startMs);
+      // Fetch all klines from CryptoCompare
+      const klines = await fetchKlines(symbol, 0);
       let inserted = 0;
 
       for (const k of klines) {
