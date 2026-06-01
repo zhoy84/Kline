@@ -162,6 +162,14 @@ async function recomputeEvents(coinId: number, otherCoins: Array<{ id: number; s
   }
 }
 
+/** GET returns instructions for testing */
+export async function GET() {
+  return NextResponse.json({
+    message: "Use POST to trigger sync. Example: curl -X POST https://klinelab.vercel.app/api/sync",
+    docs: "Configure cron-job.org to POST (not GET) to this URL every 10-15 minutes.",
+  });
+}
+
 export async function POST() {
   // Rate limit: at most once per 30 seconds
   const now = Date.now();
