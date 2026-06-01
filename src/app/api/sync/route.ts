@@ -207,12 +207,16 @@ async function runSync(): Promise<NextResponse> {
       const symbol = coin.symbol;
       const latest = await getLatestOpenTime(coin.id);
 
-      // Fetch all klines from CryptoCompare
+      // Fetch klines from CryptoCompare
       const klines = await fetchKlines(symbol, 0);
       let inserted = 0;
 
+      // Only process recent data (5 days before latest) to avoid 1000s of upserts
+      const cutoff = (latest ?? 0) - 5 * 86400000;
       for (const k of klines) {
         const openTime = k[0] as number * 1000;
+        if (openTime < cutoff) continue; // skip old data, already in DB
+
         if (openTime <= (latest ?? 0)) {
           await insertKline(coin.id, {
             open_time: openTime,
