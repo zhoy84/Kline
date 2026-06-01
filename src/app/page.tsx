@@ -59,7 +59,7 @@ export default function Home() {
     setLoading(true);
     try {
       const [klinesRes, eventsRes] = await Promise.all([
-        fetch(`/api/klines?symbol=${symbol}`),
+        fetch(`/api/klines?symbol=${symbol}&limit=2000`),
         fetch(`/api/events?symbol=${symbol}`),
       ]);
 
