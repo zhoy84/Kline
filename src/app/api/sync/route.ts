@@ -187,7 +187,7 @@ export async function POST() {
 
       // Fetch from 2 days before latest to always get the current evolving candle
       const startMs = latest
-        ? Math.max((latest - 2 * 86400) * 1000, new Date("2025-01-01").getTime())
+        ? Math.max(latest - 2 * 86400000, new Date("2025-01-01").getTime())
         : new Date("2020-01-01").getTime();
 
       // Fetch new klines from Binance
@@ -196,7 +196,7 @@ export async function POST() {
 
       for (const k of klines) {
         const openTime = k[0] as number * 1000;
-        if (openTime <= (latest ? latest * 1000 : 0)) {
+        if (openTime <= (latest ?? 0)) {
           // Already exists — still upsert to update today's evolving candle
           await insertKline(coin.id, {
             open_time: openTime,
@@ -231,7 +231,7 @@ export async function POST() {
       if (inserted > 0) {
         const otherCoins = coins.filter(c => c.id !== coin.id);
         const recomputeFrom = (latest ?? 0) > 0
-          ? (latest! * 1000) - 30 * 86400000
+          ? (latest as number) - 30 * 86400000
           : 0;
         await recomputeEvents(coin.id, otherCoins, recomputeFrom > 0 ? recomputeFrom : 0);
       }
