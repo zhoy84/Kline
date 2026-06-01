@@ -162,21 +162,39 @@ async function computeEvents() {
       }
     }
 
-    // --- Cumulative N-day bidirectional move detection ---
+    // --- Cumulative N-day bidirectional move detection (using low for drops, high for rallies) ---
     for (let i = LOOKBACK_DAYS; i < klines.length;) {
-      const prevClose = klines[i - LOOKBACK_DAYS].close;
-      const currClose = klines[i].close;
-      const changePct = (currClose - prevClose) / prevClose * 100;
+      const prev = klines[i - LOOKBACK_DAYS];
+      const curr = klines[i];
 
-      if (Math.abs(changePct) >= DRAWDOWN_THRESHOLD) {
-        const direction = changePct > 0 ? "UP" : "DOWN";
-        const openTimeMs = Number(klines[i].open_time);
+      // Drop detection using LOW (real minimum reached)
+      const lowChange = (curr.low - prev.low) / prev.low * 100;
+      // Rally detection using HIGH (real maximum reached)
+      const highChange = (curr.high - prev.high) / prev.high * 100;
+
+      if (lowChange <= -DRAWDOWN_THRESHOLD) {
+        const direction = "DOWN";
+        const openTimeMs = Number(curr.open_time);
         const dateStr = toDateStr(openTimeMs);
         const otherPrices = await getOtherPrices(dateStr, otherCoins);
 
         await sql`
           INSERT INTO notable_events (coin_id, event_type, direction, event_date, price, change_pct, other_prices)
-          VALUES (${coin.id}, 'drawdown', ${direction}, ${dateStr}, ${currClose}, ${Math.round(changePct * 100) / 100}, ${JSON.stringify(otherPrices)})
+          VALUES (${coin.id}, 'drawdown', ${direction}, ${dateStr}, ${curr.low}, ${Math.round(lowChange * 100) / 100}, ${JSON.stringify(otherPrices)})
+          ON CONFLICT (coin_id, event_date, event_type, direction)
+          DO UPDATE SET price = EXCLUDED.price, change_pct = EXCLUDED.change_pct
+        `;
+        events++;
+        i += LOOKBACK_DAYS;
+      } else if (highChange >= DRAWDOWN_THRESHOLD) {
+        const direction = "UP";
+        const openTimeMs = Number(curr.open_time);
+        const dateStr = toDateStr(openTimeMs);
+        const otherPrices = await getOtherPrices(dateStr, otherCoins);
+
+        await sql`
+          INSERT INTO notable_events (coin_id, event_type, direction, event_date, price, change_pct, other_prices)
+          VALUES (${coin.id}, 'drawdown', ${direction}, ${dateStr}, ${curr.high}, ${Math.round(highChange * 100) / 100}, ${JSON.stringify(otherPrices)})
           ON CONFLICT (coin_id, event_date, event_type, direction)
           DO UPDATE SET price = EXCLUDED.price, change_pct = EXCLUDED.change_pct
         `;

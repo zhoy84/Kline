@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { getCoins, getLatestOpenTime, insertKline } from "@/lib/db";
 
@@ -111,36 +111,49 @@ async function recomputeEvents(coinId: number, otherCoins: Array<{ id: number; s
     }
   }
 
-  // --- Cumulative N-day bidirectional move detection ---
-  // We need klines before the window to compute N-day lookback correctly
+  // --- Cumulative N-day bidirectional move detection (using low for drops, high for rallies) ---
   const { rows: leadIn } = await sql`
-    SELECT open_time, close FROM klines
+    SELECT open_time, low, high FROM klines
     WHERE coin_id = ${coinId} AND open_time < ${sinceMs}
     ORDER BY open_time DESC LIMIT ${LOOKBACK}
   `;
 
-  const allCloses = [...leadIn.reverse(), ...klines.map(r => ({ open_time: r.open_time as number, close: r.close as number }))];
+  const allRows = [...leadIn.reverse(), ...klines];
 
-  for (let i = LOOKBACK; i < allCloses.length; i++) {
-    const prevClose = allCloses[i - LOOKBACK].close;
-    const currClose = allCloses[i].close;
-    const changePct = (currClose - prevClose) / prevClose * 100;
-    const absChange = Math.abs(changePct);
+  for (let i = LOOKBACK; i < allRows.length; i++) {
+    const prev = allRows[i - LOOKBACK];
+    const curr = allRows[i];
 
-    if (absChange >= THRESHOLD) {
-      const direction = changePct > 0 ? 'UP' : 'DOWN';
-      const dateStr = toDateStr(allCloses[i].open_time);
+    // Drop: compare LOW prices
+    const lowChange = (curr.low as number - (prev.low as number)) / (prev.low as number) * 100;
+    // Rally: compare HIGH prices
+    const highChange = (curr.high as number - (prev.high as number)) / (prev.high as number) * 100;
+
+    if (lowChange <= -THRESHOLD) {
+      const direction = 'DOWN';
+      const dateStr = toDateStr(curr.open_time as number);
       const otherPrices = await getOtherPrices(dateStr, otherCoins);
 
       await sql`
         INSERT INTO notable_events (coin_id, event_type, direction, event_date, price, change_pct, other_prices)
-        VALUES (${coinId}, 'drawdown', ${direction}, ${dateStr}, ${currClose}, ${Math.round(changePct * 100) / 100}, ${JSON.stringify(otherPrices)})
+        VALUES (${coinId}, 'drawdown', ${direction}, ${dateStr}, ${curr.low}, ${Math.round(lowChange * 100) / 100}, ${JSON.stringify(otherPrices)})
         ON CONFLICT (coin_id, event_date, event_type, direction)
         DO UPDATE SET price = EXCLUDED.price, change_pct = EXCLUDED.change_pct
       `;
       events++;
-      // Skip LOOKBACK_DAYS to avoid overlapping windows
-      // We need to actually advance i, but skip the next LOOKBACK-1 iterations
+      i += LOOKBACK - 1;
+    } else if (highChange >= THRESHOLD) {
+      const direction = 'UP';
+      const dateStr = toDateStr(curr.open_time as number);
+      const otherPrices = await getOtherPrices(dateStr, otherCoins);
+
+      await sql`
+        INSERT INTO notable_events (coin_id, event_type, direction, event_date, price, change_pct, other_prices)
+        VALUES (${coinId}, 'drawdown', ${direction}, ${dateStr}, ${curr.high}, ${Math.round(highChange * 100) / 100}, ${JSON.stringify(otherPrices)})
+        ON CONFLICT (coin_id, event_date, event_type, direction)
+        DO UPDATE SET price = EXCLUDED.price, change_pct = EXCLUDED.change_pct
+      `;
+      events++;
       i += LOOKBACK - 1;
     }
   }
@@ -170,10 +183,13 @@ export async function GET() {
   });
 }
 
-export async function POST() {
-  // Rate limit: at most once per 30 seconds
+export async function POST(request: NextRequest) {
+  // Rate limit: at most once per 30 seconds (unless full recompute)
   const now = Date.now();
-  if (now - lastSyncAt < 30000) {
+  const { searchParams } = new URL(request.url);
+  const fullRecompute = searchParams.get("full") === "true";
+
+  if (!fullRecompute && now - lastSyncAt < 30000) {
     return NextResponse.json({ status: "too_soon" }, { status: 429 });
   }
   lastSyncAt = now;
@@ -237,7 +253,16 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({ status: "ok" });
+    // Full recompute: delete all events and recompute from scratch
+    if (fullRecompute) {
+      await sql`DELETE FROM notable_events`;
+      for (const coin of coins) {
+        const otherCoins = coins.filter(c => c.id !== coin.id);
+        await recomputeEvents(coin.id, otherCoins, 0);
+      }
+    }
+
+    return NextResponse.json({ status: "ok", full: fullRecompute });
   } catch (err) {
     console.error("POST /api/sync error:", err);
     return NextResponse.json({ error: "Sync failed" }, { status: 500 });
