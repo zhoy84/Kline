@@ -31,6 +31,15 @@ export default function KlineChart({ data }: Props) {
         background: { type: ColorType.Solid, color: "#1a1a2e" },
         textColor: "#d1d5db",
       },
+      localization: {
+        timeFormatter: (time: Time) => {
+          const d = new Date((time as number) * 1000);
+          const y = d.getUTCFullYear();
+          const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+          const day = String(d.getUTCDate()).padStart(2, "0");
+          return `${y}-${m}-${day}`;
+        },
+      },
       grid: {
         vertLines: { color: "#2a2a4a" },
         horzLines: { color: "#2a2a4a" },
@@ -43,13 +52,6 @@ export default function KlineChart({ data }: Props) {
       timeScale: {
         timeVisible: false,
         borderColor: "#2a2a4a",
-        tickMarkFormatter: (time: Time) => {
-          const d = new Date((time as number) * 1000);
-          const y = d.getUTCFullYear();
-          const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-          const day = String(d.getUTCDate()).padStart(2, "0");
-          return `${y}-${m}-${day}`;
-        },
       },
       rightPriceScale: {
         borderColor: "#2a2a4a",
