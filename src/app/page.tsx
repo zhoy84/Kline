@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import CoinSelector from "@/components/CoinSelector";
-import EventsTable, { exportEventsAsCsv } from "@/components/EventsTable";
+import EventsTable, { exportEventsAsHtml } from "@/components/EventsTable";
 import DrawdownConfig from "@/components/DrawdownConfig";
 
 const KlineChart = dynamic(() => import("@/components/KlineChart"), { ssr: false });
@@ -96,14 +96,14 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchData]);
 
-  // Export events as downloadable CSV file
+  // Export events as downloadable HTML file
   const handleExport = useCallback(() => {
-    const csv = exportEventsAsCsv(events, coins, selectedSymbol);
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const html = exportEventsAsHtml(events, coins, selectedSymbol);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `kline-events-${selectedSymbol.replace("USDT", "")}-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `kline-events-${selectedSymbol.replace("USDT", "")}-${new Date().toISOString().split("T")[0]}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

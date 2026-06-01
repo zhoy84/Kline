@@ -58,7 +58,7 @@ function getPriceColor(symbol: string): string {
   return COIN_COLORS[base] ?? "text-gray-500";
 }
 
-export function exportEventsAsCsv(
+export function exportEventsAsHtml(
   events: NotableEvent[],
   coins: Array<{ symbol: string; name: string }>,
   selectedSymbol: string
@@ -70,10 +70,18 @@ export function exportEventsAsCsv(
     orderedCoins.unshift(item);
   }
 
-  const headers = ["日期", "事件", ...orderedCoins.map((c) => c.symbol.replace("USDT", ""))];
-  const rows: string[][] = [];
+  const cellStyle = (symbol: string, isOwn: boolean): string => {
+    if (isOwn) return "color:#e5e7eb";
+    const base = symbol.replace("USDT", "");
+    const map: Record<string, string> = {
+      BTC: "color:#fbbf24",
+      ETH: "color:#a78bfa",
+      DOGE: "color:#34d399",
+    };
+    return map[base] ?? "color:#6b7280";
+  };
 
-  for (const ev of events) {
+  const tagHtml = (ev: NotableEvent): string => {
     const label =
       ev.event_type === "ath"
         ? "新高"
@@ -84,18 +92,65 @@ export function exportEventsAsCsv(
               ? "涨幅"
               : "跌幅"
             : `${Math.abs(ev.change_pct).toFixed(1)}%`;
+    const cls =
+      ev.event_type === "ath"
+        ? "tag-ath"
+        : ev.event_type === "atl"
+          ? "tag-atl"
+          : ev.direction === "UP"
+            ? "tag-up"
+            : "tag-down";
+    return `<span class="${cls}">${label}</span>`;
+  };
 
-    const row: string[] = [ev.event_date, label];
-    for (const c of orderedCoins) {
-      const isOwn = c.symbol === selectedSymbol;
-      const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
-      row.push(fmtPrice(price, c.symbol));
-    }
-    rows.push(row);
-  }
+  const rows = events
+    .map(
+      (ev) =>
+        `<tr><td class="date">${ev.event_date}</td><td>${tagHtml(ev)}</td>${orderedCoins
+          .map((c) => {
+            const isOwn = c.symbol === selectedSymbol;
+            const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
+            return `<td class="price" style="${cellStyle(c.symbol, isOwn)}">${fmtPrice(price, c.symbol)}</td>`;
+          })
+          .join("")}</tr>`
+    )
+    .join("\n");
 
-  const escape = (v: string) => (v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
-  return [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
+<title>Kline Lab 事件导出</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f1a;color:#d1d5db;padding:16px;font-size:14px}
+h1{font-size:18px;font-weight:700;margin-bottom:4px;background:linear-gradient(90deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{color:#6b7280;font-size:12px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 6px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;font-size:13px;white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid #1f2937;font-size:13px}
+.date{color:#9ca3af;white-space:nowrap}
+.price{text-align:right;font-family:"SF Mono","Cascadia Code","Consolas",monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tag-ath{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #166534;color:#4ade80;background:#052e16}
+.tag-atl{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #991b1b;color:#f87171;background:#450a0a}
+.tag-up{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #0891b2;color:#22d3ee;background:#083344}
+.tag-down{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #c2410c;color:#fb923c;background:#2d1b00}
+</style>
+</head>
+<body>
+<h1>Kline Lab · 事件导出</h1>
+<div class="sub">${new Date().toISOString().split("T")[0]} · ${events.length} 条</div>
+<table>
+<thead>
+<tr><th>日期</th><th>事件</th>${orderedCoins.map((c) => `<th>${c.symbol.replace("USDT", "")}</th>`).join("")}</tr>
+</thead>
+<tbody>
+${rows}
+</tbody>
+</table>
+</body>
+</html>`;
 }
 
 export default function EventsTable({ events, coins, selectedSymbol }: Props) {
