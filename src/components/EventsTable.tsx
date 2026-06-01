@@ -70,82 +70,42 @@ export function exportEventsAsHtml(
     orderedCoins.unshift(item);
   }
 
-  const coinColor = (symbol: string, isOwn: boolean): string => {
-    if (isOwn) return WEB.coinOwn;
-    const base = symbol.replace("USDT", "");
-    const map: Record<string, string> = {
-      BTC: WEB.coinBTC,
-      ETH: WEB.coinETH,
-      DOGE: WEB.coinDOGE,
-    };
-    return map[base] ?? WEB.coinOther;
-  };
+  const tbody = events
+    .map((ev) => {
+      const tagCls =
+        ev.event_type === "ath"
+          ? "ath"
+          : ev.event_type === "atl"
+            ? "atl"
+            : ev.direction === "UP"
+              ? "up"
+              : "down";
+      const tagLabel =
+        ev.event_type === "ath"
+          ? "新高"
+          : ev.event_type === "atl"
+            ? "新低"
+            : ev.change_pct == null
+              ? ev.direction === "UP"
+                ? "涨幅"
+                : "跌幅"
+              : `${Math.abs(ev.change_pct).toFixed(1)}%`;
 
-  const tagHtml = (ev: NotableEvent): string => {
-    const label =
-      ev.event_type === "ath"
-        ? "新高"
-        : ev.event_type === "atl"
-          ? "新低"
-          : ev.change_pct == null
-            ? ev.direction === "UP"
-              ? "涨幅"
-              : "跌幅"
-            : `${Math.abs(ev.change_pct).toFixed(1)}%`;
-    const style =
-      ev.event_type === "ath"
-        ? `color:${WEB.tagAthText};border-color:${WEB.tagAthBorder};background:${WEB.tagAthBg}`
-        : ev.event_type === "atl"
-          ? `color:${WEB.tagAtlText};border-color:${WEB.tagAtlBorder};background:${WEB.tagAtlBg}`
-          : ev.direction === "UP"
-            ? `color:${WEB.tagUpText};border-color:${WEB.tagUpBorder};background:${WEB.tagUpBg}`
-            : `color:${WEB.tagDownText};border-color:${WEB.tagDownBorder};background:${WEB.tagDownBg}`;
-    return `<span class="tag" style="${style}">${label}</span>`;
-  };
+      const cells = orderedCoins
+        .map((c) => {
+          const isOwn = c.symbol === selectedSymbol;
+          const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
+          const clr = isOwn ? "#e5e7eb" : ({ BTC: "#fbbf24", ETH: "#a78bfa", DOGE: "#34d399" }[c.symbol.replace("USDT", "")] ?? "#6b7280");
+          return `<td class="pr" style="color:${clr}">${fmtPrice(price, c.symbol)}</td>`;
+        })
+        .join("");
 
-  const rows = events
-    .map(
-      (ev) =>
-        `<tr><td class="date" style="color:${WEB.dateText}">${ev.event_date}</td><td>${tagHtml(ev)}</td>${orderedCoins
-          .map((c) => {
-            const isOwn = c.symbol === selectedSymbol;
-            const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
-            return `<td class="price" style="color:${coinColor(c.symbol, isOwn)}">${fmtPrice(price, c.symbol)}</td>`;
-          })
-          .join("")}</tr>`
-    )
+      return `<tr><td class="dt">${ev.event_date}</td><td><span class="tag tag-${tagCls}">${tagLabel}</span></td>${cells}</tr>`;
+    })
     .join("\n");
 
-  // Tailwind palette — keep in sync with web
-  const WEB = {
-    body: "#0f0f1a",
-    text: "#d1d5db",       // gray-300
-    textMuted: "#9ca3af",  // gray-400
-    tableBg: "#1a1a2e",
-    headerBg: "transparent",
-    headerText: "#9ca3af",
-    headerBorder: "#374151", // gray-700
-    rowBorder: "#1f2937",   // gray-800
-    rowHover: "rgba(31,41,55,0.5)",
-    selectedHeader: "#60a5fa", // blue-400
-    dateText: "#d1d5db",
-    coinOwn: "#e5e7eb",    // gray-200
-    coinBTC: "#fbbf24",    // amber-400
-    coinETH: "#a78bfa",    // violet-300
-    coinDOGE: "#34d399",   // emerald-400
-    coinOther: "#6b7280",  // gray-500
-    // Tags
-    tagAthText: "#4ade80", tagAthBorder: "#15803d", tagAthBg: "rgba(20,83,45,0.3)",
-    tagAtlText: "#f87171", tagAtlBorder: "#b91c1c", tagAtlBg: "rgba(127,29,29,0.3)",
-    tagUpText: "#22d3ee",  tagUpBorder: "#0e7490",  tagUpBg: "rgba(22,78,99,0.3)",
-    tagDownText: "#fb923c", tagDownBorder: "#c2410c", tagDownBg: "rgba(124,45,18,0.3)",
-  };
-
-  const thCells = orderedCoins
-    .map(
-      (c) =>
-        `<th style="text-align:left;padding:8px 6px;border-bottom:1px solid ${WEB.headerBorder};color:${c.symbol === selectedSymbol ? WEB.selectedHeader : WEB.headerText};font-weight:600;font-size:13px;white-space:nowrap">${c.symbol.replace("USDT", "")}</th>`
-    )
+  const ths = orderedCoins
+    .map((c) => `<th class="${c.symbol === selectedSymbol ? "sel" : ""}">${c.symbol.replace("USDT", "")}</th>`)
     .join("");
 
   return `<!DOCTYPE html>
@@ -156,27 +116,28 @@ export function exportEventsAsHtml(
 <title>Kline Lab 事件导出</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:${WEB.body};color:${WEB.text};padding:16px;font-size:16px;line-height:1.5}
-.wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid ${WEB.rowBorder};border-radius:10px;background:${WEB.tableBg}}
-table{width:100%;border-collapse:collapse;min-width:300px}
-th,td{padding:10px 8px}
-thead tr{border-bottom:1px solid ${WEB.headerBorder}}
-tbody tr{border-bottom:1px solid ${WEB.rowBorder};transition:background .15s}
-tbody tr:hover{background:${WEB.rowHover}}
-.price{text-align:right;font-family:"SF Mono","Cascadia Code","Consolas",monospace;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:16px}
-.tag{display:inline-block;padding:3px 10px;border-radius:5px;font-size:13px;font-weight:600;border:1px solid}
-.date{white-space:nowrap;font-size:15px}
+body{background:#0f0f1a;color:#d1d5db;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:12px}
+.wrap{background:#1a1a2e;border:1px solid #1f2937;border-radius:8px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:8px 6px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;white-space:nowrap}
+th.sel{color:#60a5fa}
+tr{border-bottom:1px solid #1f2937;transition:background .15s}
+tr:hover{background:rgba(31,41,55,0.5)}
+td{padding:8px 6px}
+.dt{color:#d1d5db;white-space:nowrap}
+.pr{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:500;border:1px solid}
+.tag-ath{color:#4ade80;border-color:#15803d;background:rgba(20,83,45,0.3)}
+.tag-atl{color:#f87171;border-color:#b91c1c;background:rgba(127,29,29,0.3)}
+.tag-up{color:#22d3ee;border-color:#0e7490;background:rgba(22,78,99,0.3)}
+.tag-down{color:#fb923c;border-color:#c2410c;background:rgba(124,45,18,0.3)}
 </style>
 </head>
 <body>
 <div class="wrap">
 <table>
-<thead>
-<tr><th style="text-align:left;color:${WEB.headerText};font-weight:600;font-size:14px;padding:12px 8px">日期</th><th style="text-align:left;color:${WEB.headerText};font-weight:600;font-size:14px;padding:12px 8px">事件</th>${thCells}</tr>
-</thead>
-<tbody>
-${rows}
-</tbody>
+<thead><tr><th>日期</th><th>事件</th>${ths}</tr></thead>
+<tbody>${tbody}</tbody>
 </table>
 </div>
 </body>
