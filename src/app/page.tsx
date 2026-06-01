@@ -42,6 +42,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [drawdownThreshold, setDrawdownThreshold] = useState(20);
   const [recomputing, setRecomputing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const initialLoadDone = useRef(false);
 
   // Fetch coins list
@@ -110,6 +112,26 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [events, coins, selectedSymbol]);
 
+  // Sync latest klines from Binance
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      if (!res.ok) throw new Error(`Sync returned ${res.status}`);
+      const data = await res.json();
+      setSyncMsg(data.status === "ok" ? "同步完成" : data.status);
+      // Refresh current view
+      if (selectedSymbol) fetchData(selectedSymbol, false);
+    } catch (err) {
+      console.error("Sync error:", err);
+      setSyncMsg("同步失败");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(null), 3000);
+    }
+  }, [selectedSymbol, fetchData]);
+
   // Recompute events with current threshold
   const handleRecompute = useCallback(async () => {
     setRecomputing(true);
@@ -170,11 +192,25 @@ export default function Home() {
             <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-800">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-300">
-                    历史事件记录
-                    <span className="text-xs text-gray-500 ml-2">({events.length})</span>
-                  </h2>
                   <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-gray-300">
+                      历史事件记录
+                      <span className="text-xs text-gray-500 ml-2">({events.length})</span>
+                    </h2>
+                    {syncMsg && (
+                      <span className={`text-xs ${syncMsg === "同步完成" ? "text-green-400" : "text-red-400"}`}>
+                        {syncMsg}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSync}
+                      disabled={syncing}
+                      className="text-xs px-2 py-1 rounded bg-green-700 hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white transition-colors"
+                    >
+                      {syncing ? "同步中…" : "同步"}
+                    </button>
                     <button
                       onClick={handleExport}
                       className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
