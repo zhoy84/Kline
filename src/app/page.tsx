@@ -45,12 +45,13 @@ export default function Home() {
   // Fetch coins list
   useEffect(() => {
     fetch("/api/coins")
-      .then((r) => r.json())
-      .then((data) => {
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`API /api/coins returned ${r.status}`);
+        const data = await r.json();
         setCoins(data);
         if (data.length > 0) setSelectedSymbol(data[0].symbol);
       })
-      .catch(console.error);
+      .catch((err) => console.error("Coins fetch error:", err));
   }, []);
 
   // Fetch klines + events when symbol changes
@@ -61,8 +62,13 @@ export default function Home() {
         fetch(`/api/klines?symbol=${symbol}`),
         fetch(`/api/events?symbol=${symbol}`),
       ]);
+
+      if (!klinesRes.ok) throw new Error(`API /api/klines returned ${klinesRes.status}`);
+      if (!eventsRes.ok) throw new Error(`API /api/events returned ${eventsRes.status}`);
+
       const klinesData = await klinesRes.json();
       const eventsData = await eventsRes.json();
+      console.log(`Loaded ${klinesData.length} klines, ${eventsData.length} events for ${symbol}`);
       setKlines(klinesData);
       setEvents(eventsData);
     } catch (err) {
