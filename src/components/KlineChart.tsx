@@ -52,6 +52,12 @@ export default function KlineChart({ data }: Props) {
       timeScale: {
         timeVisible: false,
         borderColor: "#2a2a4a",
+        tickMarkFormatter: (time: Time) => {
+          const d = new Date((time as number) * 1000);
+          const y = d.getUTCFullYear();
+          const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+          return `${y}-${m}`;
+        },
       },
       rightPriceScale: {
         borderColor: "#2a2a4a",
