@@ -1,13 +1,12 @@
 /**
- * Local sync script — run from your REAL terminal (not opencode's sandbox).
+ * Local sync script — run from any machine that can reach Binance.
  * Fetches latest klines from Binance and writes to Neon DB.
  *
- * Usage:
- *   node scripts/sync-local.mjs
+ * Usage (pick one):
+ *   1. node scripts/sync-local.mjs                     # uses .env.local
+ *   2. set POSTGRES_URL=... && node scripts/sync-local.mjs
  *
- * Prerequisites:
- *   - POSTGRES_URL env var set (or .env.local in project root)
- *   - Node.js 18+
+ * Prerequisites: Node.js 18+
  */
 import { sql } from "@vercel/postgres";
 import { readFileSync, existsSync } from "node:fs";
