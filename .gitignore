@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# opencode internal state
+.omo/
+
+# large data files (can be re-downloaded)
+*USDT-1d.csv
+*USDT-1w.csv
