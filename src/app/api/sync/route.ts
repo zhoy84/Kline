@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { getCoins, getLatestOpenTime, insertKline } from "@/lib/db";
 
@@ -175,106 +175,6 @@ async function recomputeEvents(coinId: number, otherCoins: Array<{ id: number; s
   }
 }
 
-/**
- * Full recompute: batch process all events at once for ALL coins.
- * Uses in-memory price map instead of per-event DB queries (~50x faster).
- */
-async function fullRecomputeAllEvents() {
-  const coins = await getCoins();
-  const coinMap = new Map(coins.map(c => [c.id, c.symbol]));
-
-  const { rows: allKlines } = await sql`
-    SELECT coin_id, open_time, high, low, close FROM klines ORDER BY coin_id, open_time ASC
-  `;
-
-  // Build price lookup: open_time_ms -> { coinId -> { high, low, close } }
-  const priceByDate = new Map<number, Map<number, { high: number; low: number; close: number }>>();
-  for (const row of allKlines) {
-    const ts = Number(row.open_time);
-    if (!priceByDate.has(ts)) priceByDate.set(ts, new Map());
-    priceByDate.get(ts)!.set(Number(row.coin_id), {
-      high: row.high as number,
-      low: row.low as number,
-      close: row.close as number,
-    });
-  }
-  const allDates = [...priceByDate.keys()].sort((a, b) => a - b);
-
-  function getOtherPrices(dateMs: number, excludeId: number): Record<string, number> {
-    const result: Record<string, number> = {};
-    const day = priceByDate.get(dateMs);
-    if (!day) return result;
-    for (const [cid, p] of day) {
-      if (cid !== excludeId) {
-        const sym = coinMap.get(cid);
-        if (sym) result[sym] = p.close;
-      }
-    }
-    return result;
-  }
-
-  await sql`DELETE FROM notable_events`;
-  const LOOKBACK = LOOKBACK_DAYS;
-  const THRESHOLD = DRAWDOWN_THRESHOLD;
-  let total = 0;
-
-  for (const coin of coins) {
-    const coinDates = allDates.filter(d => priceByDate.get(d)?.has(coin.id));
-    const batch: Array<{
-      eventType: string; dir: string; date: string;
-      price: number; changePct: number | null;
-      otherPrices: Record<string, number>;
-    }> = [];
-
-    // ATH / ATL
-    let runningHigh = -Infinity, runningLow = Infinity, firstHighSeen = false;
-    for (const dateMs of coinDates) {
-      const row = priceByDate.get(dateMs)!.get(coin.id)!;
-      const dateStr = toDateStr(dateMs);
-
-      if (row.high > runningHigh) {
-        if (runningHigh > 0) firstHighSeen = true;
-        runningHigh = row.high;
-        batch.push({ eventType: 'ath', dir: 'UP', date: dateStr, price: row.high, changePct: null, otherPrices: getOtherPrices(dateMs, coin.id) });
-      }
-      if (row.low < runningLow && firstHighSeen) {
-        runningLow = row.low;
-        batch.push({ eventType: 'atl', dir: 'DOWN', date: dateStr, price: row.low, changePct: null, otherPrices: getOtherPrices(dateMs, coin.id) });
-      }
-    }
-
-    // N-day drawdown
-    for (let i = LOOKBACK; i < coinDates.length;) {
-      const prev = priceByDate.get(coinDates[i - LOOKBACK])!.get(coin.id)!;
-      const curr = priceByDate.get(coinDates[i])!.get(coin.id)!;
-      const lowChange = (curr.low - prev.low) / prev.low * 100;
-      const highChange = (curr.high - prev.high) / prev.high * 100;
-
-      if (lowChange <= -THRESHOLD) {
-        batch.push({ eventType: 'drawdown', dir: 'DOWN', date: toDateStr(coinDates[i]), price: curr.low, changePct: Math.round(lowChange * 100) / 100, otherPrices: getOtherPrices(coinDates[i], coin.id) });
-        i += LOOKBACK;
-      } else if (highChange >= THRESHOLD) {
-        batch.push({ eventType: 'drawdown', dir: 'UP', date: toDateStr(coinDates[i]), price: curr.high, changePct: Math.round(highChange * 100) / 100, otherPrices: getOtherPrices(coinDates[i], coin.id) });
-        i += LOOKBACK;
-      } else {
-        i++;
-      }
-    }
-
-    // Batch insert
-    for (const ev of batch) {
-      await sql`
-        INSERT INTO notable_events (coin_id, event_type, direction, event_date, price, change_pct, other_prices)
-        VALUES (${coin.id}, ${ev.eventType}, ${ev.dir}, ${ev.date}, ${ev.price}, ${ev.changePct}, ${JSON.stringify(ev.otherPrices)})
-        ON CONFLICT (coin_id, event_date, event_type, direction)
-        DO UPDATE SET price = EXCLUDED.price, change_pct = EXCLUDED.change_pct
-      `;
-    }
-    total += batch.length;
-  }
-  return total;
-}
-
 /** GET returns instructions for testing */
 export async function GET() {
   return NextResponse.json({
@@ -283,13 +183,10 @@ export async function GET() {
   });
 }
 
-export async function POST(request: NextRequest) {
-  // Rate limit: at most once per 30 seconds (unless full recompute)
+export async function POST() {
+  // Rate limit: at most once per 30 seconds
   const now = Date.now();
-  const { searchParams } = new URL(request.url);
-  const fullRecompute = searchParams.get("full") === "true";
-
-  if (!fullRecompute && now - lastSyncAt < 30000) {
+  if (now - lastSyncAt < 30000) {
     return NextResponse.json({ status: "too_soon" }, { status: 429 });
   }
   lastSyncAt = now;
@@ -353,13 +250,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Full recompute: batch process all events in memory (~50x faster)
-    if (fullRecompute) {
-      const total = await fullRecomputeAllEvents();
-      console.log(`Full recompute done: ${total} events`);
-    }
-
-    return NextResponse.json({ status: "ok", full: fullRecompute });
+    return NextResponse.json({ status: "ok" });
   } catch (err) {
     console.error("POST /api/sync error:", err);
     return NextResponse.json({ error: "Sync failed" }, { status: 500 });

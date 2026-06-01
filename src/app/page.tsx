@@ -41,6 +41,7 @@ export default function Home() {
   const [events, setEvents] = useState<NotableEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawdownThreshold, setDrawdownThreshold] = useState(20);
+  const [recomputing, setRecomputing] = useState(false);
   const initialLoadDone = useRef(false);
 
   // Fetch coins list
@@ -95,6 +96,27 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchData]);
 
+  // Recompute events with current threshold
+  const handleRecompute = useCallback(async () => {
+    setRecomputing(true);
+    try {
+      const res = await fetch("/api/recompute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threshold: drawdownThreshold, lookback: 5 }),
+      });
+      if (!res.ok) throw new Error(`Recompute returned ${res.status}`);
+      const data = await res.json();
+      console.log(`Recomputed ${data.events} events`);
+      // Refresh current view
+      if (selectedSymbol) fetchData(selectedSymbol, false);
+    } catch (err) {
+      console.error("Recompute error:", err);
+    } finally {
+      setRecomputing(false);
+    }
+  }, [drawdownThreshold, selectedSymbol, fetchData]);
+
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-gray-100">
       {/* Header */}
@@ -133,10 +155,19 @@ export default function Home() {
             {/* Events Table - full width on mobile, right 40% on desktop */}
             <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-800">
-                <h2 className="text-sm font-semibold text-gray-300">
-                  历史事件记录
-                  <span className="text-xs text-gray-500 ml-2">({events.length})</span>
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-gray-300">
+                    历史事件记录
+                    <span className="text-xs text-gray-500 ml-2">({events.length})</span>
+                  </h2>
+                  <button
+                    onClick={handleRecompute}
+                    disabled={recomputing}
+                    className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white transition-colors"
+                  >
+                    {recomputing ? "计算中…" : "重新生成"}
+                  </button>
+                </div>
               </div>
               <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
                 <EventsTable events={events} coins={coins} selectedSymbol={selectedSymbol} />
