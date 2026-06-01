@@ -9,7 +9,7 @@ const DRAWDOWN_THRESHOLD = parseFloat(process.env.DRAWDOWN_THRESHOLD_PCT || "20"
 let lastSyncAt = 0;
 
 function toDateStr(ms: number): string {
-  return new Date(ms).toISOString().split("T")[0];
+  return new Date(Number(ms)).toISOString().split("T")[0];
 }
 
 // Coin => CryptoCompare fsym mapping
@@ -254,7 +254,7 @@ async function runSync(): Promise<NextResponse> {
           : 0;
         await recomputeEvents(coin.id, otherCoins, recomputeFrom > 0 ? recomputeFrom : 0);
       }
-      console.log(`${symbol}: ${inserted} klines processed (latest=${new Date(latest ?? 0).toISOString().split("T")[0]})`);
+      console.log(`${symbol}: ${inserted} klines processed (latest=${new Date(Number(latest ?? 0)).toISOString().split("T")[0]})`);
     }
 
     return NextResponse.json({ status: "ok" });
