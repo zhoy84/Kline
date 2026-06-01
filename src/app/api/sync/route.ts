@@ -15,23 +15,20 @@ function toDateStr(ms: number): string {
 
 async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
   const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
-  try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (resp.ok) {
-      const json: Array<Array<number | string>> = await resp.json();
-      return json.map(k => [
-        Math.floor((k[0] as number) / 1000),
-        k[1] as string,
-        k[2] as string,
-        k[3] as string,
-        k[4] as string,
-        k[5] as string,
-      ]);
-    }
-  } catch {
+  const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!resp.ok) {
+    console.error(`Binance API ${symbol}: ${resp.status} ${resp.statusText}`);
     return [];
   }
-  return [];
+  const json: Array<Array<number | string>> = await resp.json();
+  return json.map(k => [
+    Math.floor((k[0] as number) / 1000),
+    k[1] as string,
+    k[2] as string,
+    k[3] as string,
+    k[4] as string,
+    k[5] as string,
+  ]);
 }
 
 /**
@@ -175,12 +172,9 @@ async function recomputeEvents(coinId: number, otherCoins: Array<{ id: number; s
   }
 }
 
-/** GET returns instructions for testing */
+/** GET triggers sync too (cron-job.org defaults to GET) */
 export async function GET() {
-  return NextResponse.json({
-    message: "Use POST to trigger sync. Example: curl -X POST https://klinelab.vercel.app/api/sync",
-    docs: "Configure cron-job.org to POST (not GET) to this URL every 10-15 minutes.",
-  });
+  return POST();
 }
 
 export async function POST() {
@@ -248,6 +242,7 @@ export async function POST() {
           : 0;
         await recomputeEvents(coin.id, otherCoins, recomputeFrom > 0 ? recomputeFrom : 0);
       }
+      console.log(`${symbol}: ${inserted} klines processed (latest=${new Date(latest ?? 0).toISOString().split("T")[0]})`);
     }
 
     return NextResponse.json({ status: "ok" });
