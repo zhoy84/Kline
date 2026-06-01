@@ -58,7 +58,7 @@ function getPriceColor(symbol: string): string {
   return COIN_COLORS[base] ?? "text-gray-500";
 }
 
-export function exportEventsAsHtml(
+export function exportEventsAsCsv(
   events: NotableEvent[],
   coins: Array<{ symbol: string; name: string }>,
   selectedSymbol: string
@@ -70,7 +70,9 @@ export function exportEventsAsHtml(
     orderedCoins.unshift(item);
   }
 
-  let trs = "";
+  const headers = ["日期", "事件", ...orderedCoins.map((c) => c.symbol.replace("USDT", ""))];
+  const rows: string[][] = [];
+
   for (const ev of events) {
     const label =
       ev.event_type === "ath"
@@ -81,65 +83,19 @@ export function exportEventsAsHtml(
             ? ev.direction === "UP"
               ? "涨幅"
               : "跌幅"
-            : `${ev.direction === "UP" ? "涨" : "跌"}${Math.abs(ev.change_pct).toFixed(1)}%`;
+            : `${Math.abs(ev.change_pct).toFixed(1)}%`;
 
-    trs += "<tr>";
-    trs += `<td class="date">${ev.event_date}</td>`;
-    trs += `<td class="event"><span class="tag tag-${ev.event_type} tag-${ev.direction.toLowerCase()}">${label}</span></td>`;
+    const row: string[] = [ev.event_date, label];
     for (const c of orderedCoins) {
       const isOwn = c.symbol === selectedSymbol;
       const price = isOwn ? ev.price : ev.other_prices?.[c.symbol];
-      const base = c.symbol.replace("USDT", "");
-      const color = isOwn ? "#e5e7eb" : COIN_COLORS[base] ? "#fbbf24" : "#6b7280";
-      trs += `<td class="price" style="color:${color}">${fmtPrice(price, c.symbol)}</td>`;
+      row.push(fmtPrice(price, c.symbol));
     }
-    trs += "</tr>";
-    trs += "\n";
+    rows.push(row);
   }
 
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
-<title>Kline Lab 事件导出</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f1a;color:#d1d5db;padding:16px;font-size:14px}
-h1{font-size:18px;font-weight:700;margin-bottom:4px;background:linear-gradient(90deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.sub{color:#6b7280;font-size:12px;margin-bottom:16px}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:10px 6px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;font-size:13px;white-space:nowrap}
-td{padding:8px 6px;border-bottom:1px solid #1f2937;font-size:13px}
-.date{color:#9ca3af;white-space:nowrap}
-.price{text-align:right;font-family:"SF Mono","Cascadia Code","Consolas",monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
-.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap}
-.tag-ath{border-color:#166534;color:#4ade80;background:#052e16}
-.tag-atl{border-color:#991b1b;color:#f87171;background:#450a0a}
-.tag-up{border-color:#0891b2;color:#22d3ee;background:#083344}
-.tag-down{border-color:#c2410c;color:#fb923c;background:#2d1b00}
-.coin-selected{color:#60a5fa}
-td.price:first-of-type{font-weight:600}
-@media(max-width:640px){td,th{padding:8px 4px;font-size:12px}}
-</style>
-</head>
-<body>
-<h1>Kline Lab · 事件导出</h1>
-<div class="sub">${new Date().toISOString().split("T")[0]} · 共 ${events.length} 条</div>
-<table>
-<thead>
-<tr>
-<th>日期</th>
-<th>事件</th>
-${orderedCoins.map((c) => `<th${c.symbol === selectedSymbol ? ' class="coin-selected"' : ""}>${c.symbol.replace("USDT", "")}</th>`).join("")}
-</tr>
-</thead>
-<tbody>
-${trs}
-</tbody>
-</table>
-</body>
-</html>`;
+  const escape = (v: string) => (v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
+  return [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
 }
 
 export default function EventsTable({ events, coins, selectedSymbol }: Props) {
