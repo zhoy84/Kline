@@ -25,10 +25,21 @@ async function handleProxy(url) {
   const limit = url.searchParams.get("limit") || "1000";
   const startTime = url.searchParams.get("startTime");
 
-  let binanceUrl = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  if (startTime) binanceUrl += `&startTime=${startTime}`;
-
-  const resp = await fetch(binanceUrl);
+  // 尝试多个 Binance API 域名（主站被 451 时备选）
+  const hosts = ["api.binance.com", "api1.binance.com", "api2.binance.com", "api3.binance.com"];
+  let resp;
+  for (const host of hosts) {
+    const tryUrl = `https://${host}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}` + (startTime ? `&startTime=${startTime}` : "");
+    try {
+      resp = await fetch(tryUrl, { signal: AbortSignal.timeout(5000) });
+      if (resp.ok) break;
+    } catch {
+      continue;
+    }
+  }
+  if (!resp || !resp.ok) {
+    return new Response("Binance unavailable", { status: 502 });
+  }
   const body = await resp.text();
   return new Response(body, {
     status: resp.status,
