@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import CoinSelector from "@/components/CoinSelector";
 import EventsTable from "@/components/EventsTable";
@@ -41,6 +41,7 @@ export default function Home() {
   const [events, setEvents] = useState<NotableEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawdownThreshold, setDrawdownThreshold] = useState(20);
+  const initialLoadDone = useRef(false);
 
   // Fetch coins list
   useEffect(() => {
@@ -55,8 +56,8 @@ export default function Home() {
   }, []);
 
   // Fetch klines + events when symbol changes
-  const fetchData = useCallback(async (symbol: string) => {
-    setLoading(true);
+  const fetchData = useCallback(async (symbol: string, showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const [klinesRes, eventsRes] = await Promise.all([
         fetch(`/api/klines?symbol=${symbol}&limit=2000`),
@@ -68,18 +69,30 @@ export default function Home() {
 
       const klinesData = await klinesRes.json();
       const eventsData = await eventsRes.json();
-      console.log(`Loaded ${klinesData.length} klines, ${eventsData.length} events for ${symbol}`);
       setKlines(klinesData);
       setEvents(eventsData);
     } catch (err) {
       console.error("Fetch error:", err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
+  // Initial load + symbol change
   useEffect(() => {
-    if (selectedSymbol) fetchData(selectedSymbol);
+    if (selectedSymbol) {
+      fetchData(selectedSymbol, true);
+      initialLoadDone.current = true;
+    }
+  }, [selectedSymbol, fetchData]);
+
+  // Auto-refresh every 60 seconds (no loading spinner)
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    const interval = setInterval(() => {
+      if (selectedSymbol) fetchData(selectedSymbol, false);
+    }, 60000);
+    return () => clearInterval(interval);
   }, [selectedSymbol, fetchData]);
 
   return (
@@ -88,9 +101,9 @@ export default function Home() {
       <header className="border-b border-gray-800 bg-[#1a1a2e]/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Crypto K-Line
-            </h1>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Kline Lab
+              </h1>
             <span className="text-xs text-gray-500 hidden sm:inline">2020 ~ Now</span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">

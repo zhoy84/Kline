@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { createChart, ColorType, IChartApi, CandlestickSeries } from "lightweight-charts";
+import { useEffect, useRef } from "react";
+import { createChart, ColorType, IChartApi, CandlestickSeries, Time } from "lightweight-charts";
 
 interface KlineData {
   open_time: number;
@@ -18,19 +18,7 @@ interface Props {
 export default function KlineChart({ data }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-
   const resizeObserver = useRef<ResizeObserver | null>(null);
-
-  const formatData = useCallback(() => {
-    return data.map((d) => ({
-      time: Math.floor(d.open_time / 1000) as any, // lightweight-charts uses seconds
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-    }));
-  }, [data]);
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
@@ -55,6 +43,13 @@ export default function KlineChart({ data }: Props) {
       timeScale: {
         timeVisible: false,
         borderColor: "#2a2a4a",
+        tickMarkFormatter: (time: Time) => {
+          const d = new Date((time as number) * 1000);
+          const y = d.getUTCFullYear();
+          const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+          const day = String(d.getUTCDate()).padStart(2, "0");
+          return `${y}-${m}-${day}`;
+        },
       },
       rightPriceScale: {
         borderColor: "#2a2a4a",
@@ -72,11 +67,14 @@ export default function KlineChart({ data }: Props) {
       wickUpColor: "#22c55e",
     });
 
-    candlestickSeries.setData(formatData());
-    chart.timeScale().fitContent();
+    const chartData = data.map((d) => ({
+      time: Math.floor(d.open_time / 1000) as any,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
 
-    // Zoom to last ~400 candles for thicker candle rendering
-    const chartData = formatData();
     candlestickSeries.setData(chartData);
     chart.timeScale().fitContent();
 
@@ -94,7 +92,6 @@ export default function KlineChart({ data }: Props) {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         chart.applyOptions({ width, height: Math.max(400, height) });
-        setContainerSize({ width, height });
       }
     });
     resizeObserver.current.observe(container);
@@ -104,7 +101,7 @@ export default function KlineChart({ data }: Props) {
       chart.remove();
       chartRef.current = null;
     };
-  }, [data, formatData]);
+  }, [data]);
 
   return (
     <div
