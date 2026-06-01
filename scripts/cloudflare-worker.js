@@ -9,78 +9,79 @@
  *   1. https://dash.cloudflare.com/ → Workers & Pages → 创建 Worker
  *   2. 选 "Hello World" 模板，粘贴此代码覆盖，点部署
  *   3. 记下 Worker 域名 (e.g. binance-proxy.xxx.workers.dev)
- *   4. Worker → 设置 → 变量 → 添加 VERCEL_URL
- *      → 值: https://klinelab.vercel.app
- *   5. Worker → 触发器 → Cron Triggers → 添加
- *      → 填: */10 * * * *
+ *   4. Worker → 设置 → 变量 → 添加 VERCEL_URL=https://klinelab.vercel.app
+ *   5. Worker → 触发器 → Cron Triggers → 添加 */10 * * * *
  *   6. Vercel 项目 → Settings → Environment Variables
  *      → 新增 BINANCE_PROXY_URL = https://binance-proxy.xxx.workers.dev
  *   7. 去 cron-job.org 删掉旧任务
  */
 
-export default {
-  // ── HTTP 处理：代理 Binance + 手动触发同步 ──
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
+// ── Binance 代理 ──
+async function handleProxy(url) {
+  const symbol = url.searchParams.get("symbol");
+  if (!symbol) return new Response("Missing symbol", { status: 400 });
 
-    // 健康检查
-    if (path === "/__health") {
-      return json({ status: "ok" });
-    }
+  const interval = url.searchParams.get("interval") || "1d";
+  const limit = url.searchParams.get("limit") || "1000";
+  const startTime = url.searchParams.get("startTime");
 
-    // 手动触发同步：GET https://worker.xxx/__sync
-    if (path === "/__sync") {
-      const target = env.VERCEL_URL;
-      if (!target) return json({ error: "VERCEL_URL not set" }, 500);
-      const resp = await fetch(`${target}/api/sync`, { method: "POST" });
-      const body = await resp.text();
-      return new Response(body, {
-        status: resp.status,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+  let binanceUrl = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  if (startTime) binanceUrl += `&startTime=${startTime}`;
 
-    // ── Binance 代理 ──
-    const symbol = url.searchParams.get("symbol");
-    if (!symbol) return new Response("Missing symbol", { status: 400 });
+  const resp = await fetch(binanceUrl);
+  const body = await resp.text();
+  return new Response(body, {
+    status: resp.status,
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+  });
+}
 
-    const interval = url.searchParams.get("interval") || "1d";
-    const limit = url.searchParams.get("limit") || "1000";
-    const startTime = url.searchParams.get("startTime");
-
-    let binanceUrl = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    if (startTime) binanceUrl += `&startTime=${startTime}`;
-
-    const resp = await fetch(binanceUrl);
-    const body = await resp.text();
-
-    return new Response(body, {
-      status: resp.status,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+// ── 手动触发 Vercel sync ──
+async function handleSync(vercelUrl) {
+  if (!vercelUrl) {
+    return new Response(JSON.stringify({ error: "VERCEL_URL not set" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
     });
-  },
-
-  // ── Cron 定时触发 Vercel sync ──
-  async scheduled(event, env, ctx) {
-    const target = env.VERCEL_URL;
-    if (!target) {
-      console.error("VERCEL_URL not configured");
-      return;
-    }
-    console.log(`Triggering sync: ${target}/api/sync`);
-    try {
-      const resp = await fetch(`${target}/api/sync`, { method: "POST" });
-      console.log(`Sync done: ${resp.status}`);
-    } catch (e) {
-      console.error("Sync failed:", e.message);
-    }
-  },
-};
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
+  }
+  const resp = await fetch(`${vercelUrl}/api/sync`, { method: "POST" });
+  const body = await resp.text();
+  return new Response(body, {
+    status: resp.status,
     headers: { "Content-Type": "application/json" },
   });
 }
+
+// ── HTTP 请求入口 ──
+addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  const path = url.pathname;
+
+  if (path === "/__health") {
+    event.respondWith(new Response(JSON.stringify({ status: "ok" }), {
+      headers: { "Content-Type": "application/json" },
+    }));
+  } else if (path === "/__sync") {
+    event.respondWith(handleSync(
+      (typeof VERCEL_URL !== "undefined" ? VERCEL_URL : "") ||
+      url.searchParams.get("vercel_url")
+    ));
+  } else {
+    event.respondWith(handleProxy(url));
+  }
+});
+
+// ── Cron 定时触发 ──
+addEventListener("scheduled", (event) => {
+  const target = typeof VERCEL_URL !== "undefined" ? VERCEL_URL : "";
+  if (!target) {
+    console.error("VERCEL_URL not configured");
+    return;
+  }
+  console.log(`Triggering sync: ${target}/api/sync`);
+  event.waitUntil(
+    fetch(`${target}/api/sync`, { method: "POST" })
+      .then((r) => console.log(`Sync done: ${r.status}`))
+      .catch((e) => console.error("Sync failed:", e.message))
+  );
+});
