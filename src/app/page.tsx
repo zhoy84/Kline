@@ -93,7 +93,7 @@ export default function Home() {
             </h1>
             <span className="text-xs text-gray-500 hidden sm:inline">2020 ~ Now</span>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
             <CoinSelector
               coins={coins}
               selected={selectedSymbol}
@@ -126,7 +126,7 @@ export default function Home() {
                 </h2>
               </div>
               <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
-                <EventsTable events={events} coins={coins} />
+                <EventsTable events={events} coins={coins} selectedSymbol={selectedSymbol} />
               </div>
             </div>
           </div>

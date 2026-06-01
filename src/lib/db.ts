@@ -33,17 +33,17 @@ export async function getCoins(): Promise<Coin[]> {
   return rows as Coin[];
 }
 
-/** Fetch klines for a coin symbol, with optional limit */
-export async function getKlines(symbol: string, limit = 2000): Promise<Kline[]> {
+/** Fetch recent klines for a coin symbol (newest first, then reversed to ASC) */
+export async function getKlines(symbol: string, limit = 730): Promise<Kline[]> {
   const { rows } = await sql`
     SELECT k.open_time, k.open, k.high, k.low, k.close, k.volume
     FROM klines k
     JOIN coins c ON c.id = k.coin_id
     WHERE c.symbol = ${symbol}
-    ORDER BY k.open_time ASC
+    ORDER BY k.open_time DESC
     LIMIT ${limit}
   `;
-  return rows as Kline[];
+  return (rows as Kline[]).reverse();
 }
 
 /** Fetch notable events for a coin symbol, optionally filtered by type */
