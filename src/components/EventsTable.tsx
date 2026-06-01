@@ -89,7 +89,9 @@ export function exportEventsAsHtml(
               ? ev.direction === "UP"
                 ? "涨幅"
                 : "跌幅"
-              : `${Math.abs(ev.change_pct).toFixed(1)}%`;
+              : ev.direction === "UP"
+                ? `涨${Math.abs(ev.change_pct).toFixed(1)}%`
+                : `跌${Math.abs(ev.change_pct).toFixed(1)}%`;
 
       const cells = orderedCoins
         .map((c) => {
