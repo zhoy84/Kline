@@ -190,9 +190,9 @@ async function fullRecomputeAllEvents() {
   // Build price lookup: open_time_ms -> { coinId -> { high, low, close } }
   const priceByDate = new Map<number, Map<number, { high: number; low: number; close: number }>>();
   for (const row of allKlines) {
-    const ts = row.open_time as number;
+    const ts = Number(row.open_time);
     if (!priceByDate.has(ts)) priceByDate.set(ts, new Map());
-    priceByDate.get(ts)!.set(row.coin_id as number, {
+    priceByDate.get(ts)!.set(Number(row.coin_id), {
       high: row.high as number,
       low: row.low as number,
       close: row.close as number,
