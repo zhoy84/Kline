@@ -35,7 +35,14 @@ function getEventColor(ev: NotableEvent): string {
 
 function fmtPrice(p: number | undefined | null): string {
   if (p == null) return "-";
-  return "$" + p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const decimals = p >= 1000 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : 6;
+  return (
+    "$" +
+    p.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: decimals,
+    })
+  );
 }
 
 export default function EventsTable({ events, coins, selectedSymbol }: Props) {

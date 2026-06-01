@@ -3,38 +3,34 @@ import { sql } from "@vercel/postgres";
 import { getCoins, getLatestOpenTime, insertKline } from "@/lib/db";
 
 const BINANCE_API = "https://api.binance.com/api/v3/klines";
-const BINANCE_VISION = "https://data.binance.vision/data/spot/monthly/klines";
 const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS || "5");
 const DRAWDOWN_THRESHOLD = parseFloat(process.env.DRAWDOWN_THRESHOLD_PCT || "20");
+
+// Simple in-memory rate limiter (per-instance, good enough for cron-triggered sync)
+let lastSyncAt = 0;
 
 function toDateStr(ms: number): string {
   return new Date(ms).toISOString().split("T")[0];
 }
 
-/**
- * Fetch klines from the best available source.
- * Priority: Binance REST API (real-time) → Binance data.vision (historical fallback).
- */
 async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
-  // Try REST API first (no ZIP, real-time)
-  const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
+  const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=5`;
   try {
     const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (resp.ok) {
       const json: Array<Array<number | string>> = await resp.json();
       return json.map(k => [
-        Math.floor((k[0] as number) / 1000), // open_time in seconds
-        k[1] as string, // open
-        k[2] as string, // high
-        k[3] as string, // low
-        k[4] as string, // close
-        k[5] as string, // volume
+        Math.floor((k[0] as number) / 1000),
+        k[1] as string,
+        k[2] as string,
+        k[3] as string,
+        k[4] as string,
+        k[5] as string,
       ]);
     }
   } catch {
-    // Fall through to data.binance.vision
+    return [];
   }
-
   return [];
 }
 
@@ -167,27 +163,47 @@ async function recomputeEvents(coinId: number, otherCoins: Array<{ id: number; s
 }
 
 export async function POST() {
+  // Rate limit: at most once per 30 seconds
+  const now = Date.now();
+  if (now - lastSyncAt < 30000) {
+    return NextResponse.json({ status: "too_soon" }, { status: 429 });
+  }
+  lastSyncAt = now;
+
   try {
     const coins = await getCoins();
-    const now = Date.now();
 
     for (const coin of coins) {
       const symbol = coin.symbol;
       const latest = await getLatestOpenTime(coin.id);
-      const startMs = latest ? (latest + 86400) * 1000 : new Date("2020-01-01").getTime();
 
-      // Skip if already up to date
-      if (latest && latest * 1000 >= now - 86400000) {
-        continue;
-      }
+      // Fetch from 2 days before latest to always get the current evolving candle
+      const startMs = latest
+        ? Math.max((latest - 2 * 86400) * 1000, new Date("2025-01-01").getTime())
+        : new Date("2020-01-01").getTime();
 
       // Fetch new klines from Binance
       const klines = await fetchKlines(symbol, startMs);
       let inserted = 0;
 
       for (const k of klines) {
-        const openTime = k[0] as number * 1000; // convert to ms
-        if (openTime <= (latest ? latest * 1000 : 0)) continue;
+        const openTime = k[0] as number * 1000;
+        if (openTime <= (latest ? latest * 1000 : 0)) {
+          // Already exists — still upsert to update today's evolving candle
+          await insertKline(coin.id, {
+            open_time: openTime,
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+            close_time: 0,
+            quote_volume: 0,
+            trades: 0,
+          });
+          inserted++;
+          continue;
+        }
 
         await insertKline(coin.id, {
           open_time: openTime,
@@ -207,7 +223,7 @@ export async function POST() {
       if (inserted > 0) {
         const otherCoins = coins.filter(c => c.id !== coin.id);
         const recomputeFrom = (latest ?? 0) > 0
-          ? (latest! * 1000) - 30 * 86400000 // go back 30 days to catch overlapping windows
+          ? (latest! * 1000) - 30 * 86400000
           : 0;
         await recomputeEvents(coin.id, otherCoins, recomputeFrom > 0 ? recomputeFrom : 0);
       }

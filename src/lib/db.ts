@@ -75,7 +75,7 @@ export async function getEvents(
   return rows as NotableEvent[];
 }
 
-/** Insert a kline row (idempotent) */
+/** Insert or update a kline row (upserts on conflict to capture evolving daily candles) */
 export async function insertKline(
   coinId: number,
   k: Kline & { close_time: number; quote_volume: number; trades: number }
@@ -84,7 +84,15 @@ export async function insertKline(
     INSERT INTO klines (coin_id, open_time, open, high, low, close, volume, close_time, quote_volume, trades)
     VALUES (${coinId}, ${k.open_time}, ${k.open}, ${k.high}, ${k.low}, ${k.close},
             ${k.volume}, ${k.close_time}, ${k.quote_volume}, ${k.trades})
-    ON CONFLICT (coin_id, open_time) DO NOTHING
+    ON CONFLICT (coin_id, open_time)
+    DO UPDATE SET
+      high = EXCLUDED.high,
+      low = EXCLUDED.low,
+      close = EXCLUDED.close,
+      volume = EXCLUDED.volume,
+      close_time = EXCLUDED.close_time,
+      quote_volume = EXCLUDED.quote_volume,
+      trades = EXCLUDED.trades
   `;
 }
 
