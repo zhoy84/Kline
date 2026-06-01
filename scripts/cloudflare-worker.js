@@ -10,7 +10,7 @@
  *   2. 选 "Hello World" 模板，粘贴此代码覆盖，点部署
  *   3. 记下 Worker 域名 (e.g. binance-proxy.xxx.workers.dev)
  *   4. Worker → 设置 → 变量 → 添加 VERCEL_URL=https://klinelab.vercel.app
- *   5. Worker → 触发器 → Cron Triggers → 添加 */10 * * * *
+ *   5. Worker → 触发器 → Cron Triggers → 添加  (星/10) * * * *
  *   6. Vercel 项目 → Settings → Environment Variables
  *      → 新增 BINANCE_PROXY_URL = https://binance-proxy.xxx.workers.dev
  *   7. 去 cron-job.org 删掉旧任务
