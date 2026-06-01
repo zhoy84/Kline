@@ -2,7 +2,7 @@
  * Neon Database Seed Script
  *
  * Usage:
- *   DRAWDOWN_THRESHOLD_PCT=30 node scripts/seed.mjs
+ *   $env:DRAWDOWN_THRESHOLD_PCT='30'; node scripts/seed.mjs
  *
  * This script:
  * 1. Creates tables via the migration SQL
@@ -25,12 +25,12 @@ const ROOT = join(__dirname, "..");
 const DRAWDOWN_THRESHOLD = parseFloat(process.env.DRAWDOWN_THRESHOLD_PCT || "20");
 const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS || "5");
 
-function normalizeTs(tsStr: string): number {
+function normalizeTs(tsStr) {
   const val = parseInt(tsStr);
   return val > 1e15 ? Math.floor(val / 1000) : val;
 }
 
-function toDateStr(ms: number): string {
+function toDateStr(ms) {
   return new Date(ms).toISOString().split("T")[0];
 }
 
@@ -39,18 +39,8 @@ async function runMigration() {
   const migrationPath = join(__dirname, "..", "sql", "migration.sql");
   const migrationSql = readFileSync(migrationPath, "utf-8");
 
-  const statements = migrationSql
-    .split(";")
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && !s.startsWith("--"));
-
-  for (const stmt of statements) {
-    try {
-      await sql.query(stmt + ";");
-    } catch (err) {
-      console.error("Migration statement failed:", stmt.slice(0, 100), err);
-    }
-  }
+  // Run the whole migration as one multi-statement query
+  await sql.query(migrationSql);
   console.log("Migration done.");
 }
 
@@ -135,20 +125,16 @@ async function computeEvents() {
     // --- ATH / ATL tracking (using high/low) ---
     let runningHigh = -Infinity;
     let runningLow = Infinity;
-    let firstHighSeen = false; // track if we've seen at least one "high" to avoid flood ATL at start
-
-    // --- Cumulative N-day bidirectional move tracking ---
-    // For each day i, look back N days and compute cumulative change.
-    // Record on first breach, then skip N days to avoid overlap.
+    let firstHighSeen = false;
 
     for (let i = 0; i < klines.length; i++) {
       const row = klines[i];
-      const high = row.high as number;
-      const low = row.low as number;
-      const close = row.close as number;
-      const dateStr = toDateStr(row.open_time as number);
+      const high = row.high;
+      const low = row.low;
+      const openTimeMs = Number(row.open_time);
+      const dateStr = toDateStr(openTimeMs);
 
-      // --- ATH (track highest high) ---
+      // ATH (track highest high)
       if (high > runningHigh) {
         if (runningHigh > 0) firstHighSeen = true;
         runningHigh = high;
@@ -162,7 +148,7 @@ async function computeEvents() {
         events++;
       }
 
-      // --- ATL (track lowest low, after at least one stable high seen) ---
+      // ATL (only after at least one ATH seen)
       if (low < runningLow && firstHighSeen) {
         runningLow = low;
         const otherPrices = await getOtherPrices(dateStr, otherCoins);
@@ -177,18 +163,15 @@ async function computeEvents() {
     }
 
     // --- Cumulative N-day bidirectional move detection ---
-    // Sliding non-overlapping windows: for each day i, look back N days.
-    // If cumulative change >= threshold, record event and skip N days.
-    let i = LOOKBACK_DAYS;
-    while (i < klines.length) {
-      const prevClose = (klines[i - LOOKBACK_DAYS] as any).close as number;
-      const currClose = (klines[i] as any).close as number;
+    for (let i = LOOKBACK_DAYS; i < klines.length;) {
+      const prevClose = klines[i - LOOKBACK_DAYS].close;
+      const currClose = klines[i].close;
       const changePct = (currClose - prevClose) / prevClose * 100;
-      const absChange = Math.abs(changePct);
 
-      if (absChange >= DRAWDOWN_THRESHOLD) {
-        const direction = changePct > 0 ? 'UP' : 'DOWN';
-        const dateStr = toDateStr((klines[i] as any).open_time as number);
+      if (Math.abs(changePct) >= DRAWDOWN_THRESHOLD) {
+        const direction = changePct > 0 ? "UP" : "DOWN";
+        const openTimeMs = Number(klines[i].open_time);
+        const dateStr = toDateStr(openTimeMs);
         const otherPrices = await getOtherPrices(dateStr, otherCoins);
 
         await sql`
@@ -198,7 +181,7 @@ async function computeEvents() {
           DO UPDATE SET price = EXCLUDED.price, change_pct = EXCLUDED.change_pct
         `;
         events++;
-        i += LOOKBACK_DAYS; // skip to avoid overlapping windows
+        i += LOOKBACK_DAYS;
       } else {
         i++;
       }
@@ -207,15 +190,15 @@ async function computeEvents() {
     console.log(`  ${coin.symbol}: ${events} notable events`);
   }
 
-  async function getOtherPrices(dateStr: string, otherCoins: Array<{ id: number; symbol: string }>): Promise<Record<string, number>> {
-    const result: Record<string, number> = {};
+  async function getOtherPrices(dateStr, otherCoins) {
+    const result = {};
     const dateMs = new Date(dateStr).getTime();
     for (const oc of otherCoins) {
       const { rows } = await sql`
         SELECT close FROM klines WHERE coin_id = ${oc.id} AND open_time = ${dateMs} LIMIT 1
       `;
       if (rows.length > 0) {
-        result[oc.symbol] = rows[0].close as number;
+        result[oc.symbol] = rows[0].close;
       }
     }
     return result;
