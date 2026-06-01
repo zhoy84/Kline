@@ -122,5 +122,5 @@ export async function getLatestOpenTime(coinId: number): Promise<number | null> 
     ORDER BY open_time DESC
     LIMIT 1
   `;
-  return rows.length > 0 ? (rows[0].open_time as number) : null;
+  return rows.length > 0 ? Number(rows[0].open_time) : null;
 }

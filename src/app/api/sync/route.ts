@@ -178,13 +178,7 @@ async function recomputeEvents(coinId: number, otherCoins: Array<{ id: number; s
   }
 }
 
-/** GET triggers sync too (cron-job.org defaults to GET) */
-export async function GET() {
-  return POST();
-}
-
-export async function POST() {
-  // Rate limit: at most once per 30 seconds
+async function runSync(): Promise<NextResponse> {
   const now = Date.now();
   if (now - lastSyncAt < 30000) {
     return NextResponse.json({ status: "too_soon" }, { status: 429 });
@@ -210,7 +204,6 @@ export async function POST() {
       for (const k of klines) {
         const openTime = k[0] as number * 1000;
         if (openTime <= (latest ?? 0)) {
-          // Already exists — still upsert to update today's evolving candle
           await insertKline(coin.id, {
             open_time: openTime,
             open: parseFloat(k[1]),
@@ -240,7 +233,6 @@ export async function POST() {
         inserted++;
       }
 
-      // Recompute events if new data arrived
       if (inserted > 0) {
         const otherCoins = coins.filter(c => c.id !== coin.id);
         const recomputeFrom = (latest ?? 0) > 0
@@ -253,7 +245,15 @@ export async function POST() {
 
     return NextResponse.json({ status: "ok" });
   } catch (err) {
-    console.error("POST /api/sync error:", err);
+    console.error("Sync error:", err);
     return NextResponse.json({ error: "Sync failed" }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return runSync();
+}
+
+export async function POST() {
+  return runSync();
 }
