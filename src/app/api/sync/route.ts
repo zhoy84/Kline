@@ -15,7 +15,13 @@ function toDateStr(ms: number): string {
 
 async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
   const url = `${BINANCE_API}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
-  const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  let resp: Response;
+  try {
+    resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  } catch (e) {
+    console.error(`Binance API ${symbol}: network error`, e);
+    return [];
+  }
   if (!resp.ok) {
     console.error(`Binance API ${symbol}: ${resp.status} ${resp.statusText}`);
     return [];
