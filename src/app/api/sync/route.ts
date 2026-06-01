@@ -15,7 +15,10 @@ function toDateStr(ms: number): string {
 }
 
 async function fetchKlines(symbol: string, startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
-  const base = BINANCE_PROXY || `${BINANCE_DIRECT}/api/v3/klines`;
+  let base = BINANCE_PROXY || `${BINANCE_DIRECT}/api/v3/klines`;
+  if (base && !base.startsWith("http://") && !base.startsWith("https://")) {
+    base = `https://${base}`;
+  }
   const url = `${base}?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
   let resp: Response;
   try {
