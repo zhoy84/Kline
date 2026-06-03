@@ -37,7 +37,7 @@ td.l{text-align:left;font-family:inherit}
     <div class="g2"><label>每日投票收入 (TRX)</label><input type="number" id="voteDaily" value="0.08" step="0.001"></div>
     <div class="g2"><label>已质押天数</label><input type="number" id="daysStaked" value="60" min="1" step="1"></div>
   </div>
-  <div class="info">备用金 = 质押金额（全额对冲）· 日收入 = <span id="dailyTotal">0.553</span> TRX · 已获奖励 = <span id="earnedTRX">0.00</span> TRX</div>
+  <div class="info">日收入 = <span id="dailyTotal">0.553</span> TRX · 已获奖励 = <span id="earnedTRX">0.00</span> TRX · 备用金按策略自动计算</div>
 </div>
 
 <div class="card">
@@ -104,11 +104,23 @@ function calc() {
   const earnedTRX = dailyTRX * days;
   const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
-  const backup = n * buyPrice;
-  const initial = stakeVal + backup;
+
+  // 计算策略所需最低备用金 = 所有轮次保证金之和
+  function calcBackup(levs) {
+    let total = 0, price = p0;
+    for (let i = 0; i < levs.length; i++) {
+      const ss = i === 0 ? n : totalTRX;
+      const margin = ss * price / levs[i];
+      total += margin;
+      if (i < levs.length - 1) price = price * (1 + 1 / levs[i]);
+    }
+    return total;
+  }
 
   function shortSize(round) { return round <= 1 ? n : totalTRX; }
   function runStrategy(levs) {
+    const backup = calcBackup(levs);
+    const initial = stakeVal + backup;
     let cash = backup, price = p0, round = 0, steps = [];
     for (const lev of levs) {
       while (true) {
@@ -167,14 +179,9 @@ function calc() {
     const chg = ((res.finalPrice / p0) - 1) * 100;
     const ops = res.steps.length;
     const rc = i === 0 ? ' class="highlight"' : '';
-    // 计算最低备用金（足够开完第二轮）
-    let minBackup = backup;
-    if (r.levs.length > 1 && res.steps.length >= 1) {
-      const gap = res.steps[1] ? res.steps[1].margin - res.steps[0].cashAfter : 0;
-      if (gap > 0.01) minBackup = backup + gap;
-    }
-    const minBStr = minBackup !== backup ? '$' + minBackup.toFixed(2) : '—';
-    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '</td><td>' + minBStr + '</td><td>' + res.steps.map(s => (s.shortAmt ? s.shortAmt.toFixed(0) : '') + s.lev).join('→') + '</td></tr>';
+    const reqBackup = res.steps.reduce((sum, s) => sum + s.margin, 0);
+    const bStr = '$' + reqBackup.toFixed(2);
+    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '</td><td>' + bStr + '</td><td>' + res.steps.map(s => (s.shortAmt ? s.shortAmt.toFixed(0) : '') + s.lev).join('→') + '</td></tr>';
   });
   document.getElementById('mainTable').innerHTML = html;
 
@@ -210,45 +217,55 @@ function calcDetail() {
   const earnedTRX = dailyTRX * days;
   const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
-  const backup = n * buyPrice;
-  const initial = stakeVal + backup;
 
-  function run(levs) {
-    let cash = backup, price = p0, round = 0, steps = [];
-    for (const lev of levs) {
-      while (true) {
-        round++;
-        const ss = round <= 1 ? n : totalTRX;
-        const pos = ss * price;
-        const margin = pos / lev;
-        if (margin > cash + 0.005) break;
-        const liq = price * (1 + 1/lev);
-        cash -= margin;
-        const sv = totalTRX * liq;
-        steps.push({ round, lev: lev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, total: sv + cash, profit: sv + cash - initial, shortAmt: ss });
-        price = liq; break;
-      }
+  // 同 calc 的 calcBackup
+  function calcB(ls) {
+    let t = 0, pr = p0;
+    for (let i = 0; i < ls.length; i++) {
+      const ss = i === 0 ? n : totalTRX;
+      t += ss * pr / ls[i];
+      if (i < ls.length - 1) pr = pr * (1 + 1 / ls[i]);
     }
-    const lastLev = levs[levs.length-1];
-    while (true) {
-      round++;
-      const ss = totalTRX;
-      const pos = ss * price;
-      const margin = pos / lastLev;
-      if (margin > cash + 0.005) break;
-      const liq = price * (1 + 1/lastLev);
-      cash -= margin;
-      const sv = totalTRX * liq;
-      steps.push({ round, lev: lastLev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, total: sv + cash, profit: sv + cash - initial, shortAmt: ss });
-      price = liq;
-    }
-    const sv = totalTRX * price;
-    return { steps, finalPrice: price, cash, stakedVal: sv, totalAsset: sv + cash, profit: sv + cash - initial, roi: ((sv + cash - initial) / initial) * 100 };
+    return t;
   }
 
-  const sel = document.getElementById('strategySelect').value;
-  const levs = sel.split(',').map(Number);
+  const backup = calcB(levs);
+  const initial = stakeVal + backup;
   const firstLiq = p0 * (1 + 1/levs[0]);
+
+  function run(ls) {
+    let c = calcB(ls), p = p0, r = 0, st = [];
+    for (const lv of ls) {
+      while (true) {
+        r++;
+        const ss = r <= 1 ? n : totalTRX;
+        const pos = ss * p;
+        const m = pos / lv;
+        if (m > c + 0.005) break;
+        const liq = p * (1 + 1/lv);
+        c -= m;
+        const sv = totalTRX * liq;
+        st.push({ round: r, lev: lv + 'x', entry: p, liq, margin: m, cashAfter: c, stakedVal: sv, total: sv + c, profit: sv + c - initial, shortAmt: ss });
+        p = liq; break;
+      }
+    }
+    const last = ls[ls.length - 1];
+    while (true) {
+      r++;
+      const ss = totalTRX;
+      const pos = ss * p;
+      const m = pos / last;
+      if (m > c + 0.005) break;
+      const liq = p * (1 + 1/last);
+      c -= m;
+      const sv = totalTRX * liq;
+      st.push({ round: r, lev: last + 'x', entry: p, liq, margin: m, cashAfter: c, stakedVal: sv, total: sv + c, profit: sv + c - initial, shortAmt: ss });
+      p = liq;
+    }
+    const sv = totalTRX * p;
+    return { steps: st, finalPrice: p, cash: c, stakedVal: sv, totalAsset: sv + c, profit: sv + c - initial, roi: ((sv + c - initial) / initial) * 100 };
+  }
+
   const res = run(levs);
 
   function row(cls, a, b, price, chg, contract, short, cash, stake, total, profit) {
