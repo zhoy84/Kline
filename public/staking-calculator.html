@@ -52,6 +52,7 @@ td.l{text-align:left;font-family:inherit}
         <th class="l">场景</th>
         <th class="l">杠杆</th>
         <th>TRX 价</th>
+        <th>合约价值</th>
         <th>涨跌幅</th>
         <th>短仓盈亏</th>
         <th>可用现金</th>
@@ -62,28 +63,6 @@ td.l{text-align:left;font-family:inherit}
       </tr>
     </thead>
     <tbody id="detailTable"></tbody>
-  </table>
-  </div>
-</div>
-
-<div class="card">
-  <h2 style="font-size:15px;font-weight:600;color:#e5e7eb;margin-bottom:8px">📋 全部组合排名</h2>
-  <div style="overflow-x:auto">
-  <table>
-    <thead>
-      <tr>
-        <th class="l">排名</th>
-        <th class="l">策略</th>
-        <th>轮数</th>
-        <th>止于价格</th>
-        <th>涨幅</th>
-        <th>总资产</th>
-        <th>净赚</th>
-        <th>ROI</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="mainTable"></tbody>
   </table>
   </div>
 </div>
@@ -217,9 +196,9 @@ function calcDetail() {
   const firstLiq = p0 * (1 + 1/levs[0]);
   const res = run(levs);
 
-  function row(cls, a, b, price, chg, short, cash, stake, total, profit) {
+  function row(cls, a, b, price, chg, contract, short, cash, stake, total, profit) {
     const roi = initial > 0 ? (profit / initial) * 100 : 0;
-    return '<tr' + cls + '><td class="l">' + a + '</td><td class="l">' + b + '</td><td>$' + (price > 0 ? price.toFixed(3) : '0') + '</td><td>' + chg + '</td><td class="' + (short >= 0 ? 'green' : 'red') + '">' + (short >= 0 ? '+' : '') + '$' + short.toFixed(2) + '</td><td>$' + cash.toFixed(2) + '</td><td>$' + stake.toFixed(2) + '</td><td>$' + total.toFixed(2) + '</td><td class="' + (profit >= 0 ? 'green' : 'red') + '">' + (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2) + '</td><td class="' + (roi >= 0 ? 'green' : 'red') + '">' + (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%</td></tr>';
+    return '<tr' + cls + '><td class="l">' + a + '</td><td class="l">' + b + '</td><td>$' + (price > 0 ? price.toFixed(3) : '0') + '</td><td class="orange">$' + contract.toFixed(2) + '</td><td>' + chg + '</td><td class="' + (short >= 0 ? 'green' : 'red') + '">' + (short >= 0 ? '+' : '') + '$' + short.toFixed(2) + '</td><td>$' + cash.toFixed(2) + '</td><td>$' + stake.toFixed(2) + '</td><td>$' + total.toFixed(2) + '</td><td class="' + (profit >= 0 ? 'green' : 'red') + '">' + (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2) + '</td><td class="' + (roi >= 0 ? 'green' : 'red') + '">' + (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%</td></tr>';
   }
 
   let html = '';
@@ -234,7 +213,7 @@ function calcDetail() {
       const total = totalTRX * s.p + backup + n * p0 - n * s.p;
       const profit = total - initial;
       const chg = s.p > 0 ? ((s.p/p0-1)*100).toFixed(1)+'%' : '-100%';
-      html += row('', '-', '-', s.p, chg, shortPnl, backup, totalTRX * (s.p || 0.001), total, profit);
+      html += row('', '-', '-', s.p, chg, n * s.p, shortPnl, backup, totalTRX * (s.p || 0.001), total, profit);
     }
   }
 
@@ -243,7 +222,7 @@ function calcDetail() {
     html += '<tr style="background:rgba(251,146,60,0.06)"><td colspan="10" style="text-align:center;color:#fb923c;font-weight:600">🔥 爆仓链（本策略特有，逐轮消耗保证金）</td></tr>';
     for (const s of res.steps) {
       const chg = '+' + ((s.liq/p0-1)*100).toFixed(1) + '%';
-      html += row('', '第'+s.round+'轮', s.lev, s.entry, chg, -s.margin, s.cashAfter, s.stakedVal, s.total, s.profit);
+      html += row('', '第'+s.round+'轮', s.lev, s.entry, chg, n * s.entry, -s.margin, s.cashAfter, s.stakedVal, s.total, s.profit);
     }
   }
 
@@ -260,11 +239,11 @@ function calcDetail() {
       const total = totalTRX * s.p + res.cash;
       const profit = total - initial;
       const chg = ((s.p/p0-1)*100).toFixed(1) + '%';
-      html += row('', s.l, '无', s.p, chg, 0, res.cash, totalTRX * s.p, total, profit);
+      html += row('', s.l, '无', s.p, chg, 0, 0, res.cash, totalTRX * s.p, total, profit);
     }
   }
 
-  html += '<tr class="highlight"><td colspan="10" style="text-align:center;color:#fb923c">❌ 终局: $' + res.finalPrice.toFixed(3) + '（+' + (((res.finalPrice/p0)-1)*100).toFixed(1) + '%）| 总资产 $' + res.totalAsset.toFixed(2) + ' | 净赚 +$' + res.profit.toFixed(2) + ' | ROI ' + res.roi.toFixed(2) + '%</td></tr>';
+  html += '<tr class="highlight"><td colspan="11" style="text-align:center;color:#fb923c">❌ 终局: $' + res.finalPrice.toFixed(3) + '（+' + (((res.finalPrice/p0)-1)*100).toFixed(1) + '%）| 总资产 $' + res.totalAsset.toFixed(2) + ' | 净赚 +$' + res.profit.toFixed(2) + ' | ROI ' + res.roi.toFixed(2) + '%</td></tr>';
   document.getElementById('detailTable').innerHTML = html;
 }
 
