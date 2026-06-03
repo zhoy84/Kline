@@ -168,7 +168,7 @@ function calc() {
     const rc = i === 0 ? ' class="highlight"' : '';
     const totalCapital = stakeVal + res.steps.reduce((sum, s) => sum + s.margin, 0);
     const bStr = '$' + totalCapital.toFixed(2);
-    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '</td><td>' + bStr + '</td><td>' + res.steps.map(s => s.lev).join('→') + '</td></tr>';
+    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '</td><td>' + bStr + '</td><td>' + res.steps.map(s => s.shortAmt ? s.shortAmt.toFixed(0) : '').join('→') + '</td></tr>';
   });
   document.getElementById('mainTable').innerHTML = html;
 
