@@ -70,12 +70,13 @@ async function api(method, path, params = {}) {
   return data;
 }
 
-async function openShort(lev, label) {
+async function openShort(lev, qty, label) {
   await api("POST", "/fapi/v1/leverage", { symbol: cfg.symbol, leverage: lev });
+  const q = Math.round(qty);
   await api("POST", "/fapi/v1/order", {
-    symbol: cfg.symbol, side: "SELL", type: "MARKET", quantity: Math.round(cfg.staked_trx)
+    symbol: cfg.symbol, side: "SELL", type: "MARKET", quantity: q
   });
-  log(`✅ 开空 ${lev}x ${cfg.staked_trx} ${cfg.symbol} | ${label}`);
+  log(`✅ 开空 ${lev}x ${q} ${cfg.symbol} | ${label}`);
 }
 
 async function closeAll(reason) {
@@ -125,7 +126,7 @@ async function main() {
       const hasPos = pos && Math.abs(parseFloat(pos.positionAmt)) > 0;
 
       if (!hasPos && phase === "idle") {
-        await openShort(2, `首次 @ $${price}`);
+        await openShort(2, cfg.staked_trx, `首次 @ $${price}`);
         entryPrice = price || cfg.entry_price;
         phase = "first";
         log(`📊 爆仓 ~$${(entryPrice * 1.5).toFixed(4)} 二次入场 ~$${targetRe.toFixed(4)}`);
@@ -149,7 +150,7 @@ async function main() {
         const ok = pct <= BASELINE_PCT && price <= targetRe;
         log(`⏳ 回调 ${pct.toFixed(2)}% ≤${BASELINE_PCT.toFixed(2)}% ${ok ? '🎯' : ''}`);
         if (ok) {
-          await openShort(3, `二次 @ $${price}`);
+          await openShort(3, cfg.staked_trx + EARNED, `二次 @ $${price}`);
           phase = "second";
         }
       }
