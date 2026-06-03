@@ -115,7 +115,7 @@ export function exportEventsAsHtml(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
-<title>Kline Lab 事件导出</title>
+<title>K-line Lab 事件导出</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0f0f1a;color:#d1d5db;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5;min-height:100vh}
@@ -149,7 +149,7 @@ td{padding:10px 8px}
 <body>
 <header>
 <div class="header-inner">
-<h1>Kline Lab</h1>
+<h1>K-line Lab</h1>
 <div class="header-right">
 <span class="badge">${new Date().toISOString().split("T")[0]}</span>
 </div>

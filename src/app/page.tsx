@@ -140,7 +140,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
               <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                Kline Lab
+                K-line Lab
               </h1>
             <span className="text-xs text-gray-500 hidden sm:inline">2020 ~ Now</span>
           </div>
@@ -152,7 +152,7 @@ export default function Home() {
                   tab === "kline" ? "bg-gray-700 text-gray-100" : "text-gray-500 hover:text-gray-300"
                 }`}
               >
-                K线事件簿
+                K-line Lab
               </button>
               <button
                 onClick={() => setTab("staking")}
@@ -164,19 +164,12 @@ export default function Home() {
               </button>
             </div>
             {tab === "kline" && (
-              <>
-                <CoinSelector
-                  coins={coins}
-                  selected={selectedSymbol}
-                  onSelect={setSelectedSymbol}
-                />
-                <DrawdownConfig
-                  value={drawdownThreshold}
-                  onChange={setDrawdownThreshold}
-                  disabled={recomputing}
-                  onBlur={handleRecompute}
-                />
-              </>
+              <DrawdownConfig
+                value={drawdownThreshold}
+                onChange={setDrawdownThreshold}
+                disabled={recomputing}
+                onBlur={handleRecompute}
+              />
             )}
           </div>
         </div>
@@ -197,7 +190,7 @@ export default function Home() {
               </div>
               {/* Events Table */}
               <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-800">
+                <div className="px-4 py-3 border-b border-gray-800 space-y-2">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-gray-300">
                       历史事件记录
@@ -210,6 +203,11 @@ export default function Home() {
                       导出
                     </button>
                   </div>
+                  <CoinSelector
+                    coins={coins}
+                    selected={selectedSymbol}
+                    onSelect={setSelectedSymbol}
+                  />
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
                   <EventsTable events={events} coins={coins} selectedSymbol={selectedSymbol} />

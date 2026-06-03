@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kline Lab - K线走势与事件记录",
+  title: "K-line Lab - K线走势与事件记录",
   description: "BTC/ETH/DOGE 日K线走势、历史新高/新低、大幅回调事件记录",
 };
 
