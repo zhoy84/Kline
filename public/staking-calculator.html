@@ -105,56 +105,45 @@ function calc() {
   const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
 
-  // 计算策略所需最低备用金 = 所有轮次保证金之和
-  function calcBackup(levs) {
-    let total = 0, price = p0;
-    for (let i = 0; i < levs.length; i++) {
-      const ss = i === 0 ? n : totalTRX;
-      const margin = ss * price / levs[i];
-      total += margin;
-      if (i < levs.length - 1) price = price * (1 + 1 / levs[i]);
-    }
-    return total;
+  // 回调价 = 第1轮爆后等到的价格, profit≈无涨跌收益
+  function callbackPrice(lev1) {
+    const m1 = n * p0 / lev1;
+    const baseProfit = earnedTRX * p0;
+    return (stakeVal + m1 + baseProfit) / totalTRX;
   }
 
-  function shortSize(round) { return round <= 1 ? n : totalTRX; }
+  function calcBackup(levs) {
+    const m1 = n * p0 / levs[0];
+    if (levs.length <= 1) return m1;
+    const cb = callbackPrice(levs[0]);
+    const m2 = totalTRX * cb / levs[1];
+    return m1 + m2;
+  }
+
   function runStrategy(levs) {
     const backup = calcBackup(levs);
     const initial = stakeVal + backup;
-    let cash = backup, price = p0, round = 0, steps = [];
-    for (const lev of levs) {
-      while (true) {
-        round++;
-        const ss = shortSize(round);
-        const pos = ss * price;
-        const margin = pos / lev;
-        if (margin > cash + 0.005) {
-          const sv = totalTRX * price;
-          return { steps, finalPrice: price, cash, stakedVal: sv, totalAsset: sv + cash, profit: sv + cash - initial, roi: ((sv + cash - initial) / initial) * 100 };
-        }
-        const liq = price * (1 + 1/lev);
-        cash -= margin;
-        const sv = totalTRX * liq;
-        steps.push({ round, lev: lev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, total: sv + cash, profit: sv + cash - initial, shortAmt: ss });
-        price = liq;
-        break;
-      }
+    const m1 = n * p0 / levs[0];
+    const l1 = p0 * (1 + 1/levs[0]);
+    const cb = levs.length > 1 ? callbackPrice(levs[0]) : 0;
+    const steps = [];
+
+    // 第1轮
+    steps.push({ round: 1, lev: levs[0] + 'x', entry: p0, liq: l1, margin: m1, cashAfter: backup - m1, stakedVal: totalTRX * l1, total: totalTRX * l1 + backup - m1, profit: totalTRX * l1 + backup - m1 - initial, shortAmt: n });
+
+    if (levs.length <= 1) {
+      const sv = totalTRX * l1;
+      return { steps, finalPrice: l1, cash: backup - m1, stakedVal: sv, totalAsset: sv + backup - m1, profit: sv + backup - m1 - initial, roi: ((sv + backup - m1 - initial) / initial) * 100 };
     }
-    const lastLev = levs[levs.length-1];
-    while (true) {
-      round++;
-      const ss = totalTRX;
-      const pos = ss * price;
-      const margin = pos / lastLev;
-      if (margin > cash + 0.005) break;
-      const liq = price * (1 + 1/lastLev);
-      cash -= margin;
-      const sv = totalTRX * liq;
-      steps.push({ round, lev: lastLev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, total: sv + cash, profit: sv + cash - initial, shortAmt: ss });
-      price = liq;
-    }
-    const sv = totalTRX * price;
-    return { steps, finalPrice: price, cash, stakedVal: sv, totalAsset: sv + cash, profit: sv + cash - initial, roi: ((sv + cash - initial) / initial) * 100 };
+
+    // 第2轮（在回调价开）
+    const m2 = totalTRX * cb / levs[1];
+    const l2 = cb * (1 + 1/levs[1]);
+    const cash2 = backup - m1 - m2;
+    steps.push({ round: 2, lev: levs[1] + 'x', entry: cb, liq: l2, margin: m2, cashAfter: cash2, stakedVal: totalTRX * l2, total: totalTRX * l2 + cash2, profit: totalTRX * l2 + cash2 - initial, shortAmt: totalTRX });
+
+    const sv = totalTRX * l2;
+    return { steps, finalPrice: l2, cash: cash2, stakedVal: sv, totalAsset: sv + cash2, profit: sv + cash2 - initial, roi: ((sv + cash2 - initial) / initial) * 100 };
   }
 
   const combos = [[1,2],[2,2],[2,3]];
@@ -217,52 +206,44 @@ function calcDetail() {
   const stakeVal = n * p0;
   const levs = (document.getElementById('strategySelect').value || '2,3').split(',').map(Number);
 
-  // 同 calc 的 calcBackup
+  function cbPrice(l1) {
+    const m1vl = n * p0 / l1;
+    return (stakeVal + m1vl + earnedTRX * p0) / totalTRX;
+  }
   function calcB(ls) {
-    let t = 0, pr = p0;
-    for (let i = 0; i < ls.length; i++) {
-      const ss = i === 0 ? n : totalTRX;
-      t += ss * pr / ls[i];
-      if (i < ls.length - 1) pr = pr * (1 + 1 / ls[i]);
-    }
-    return t;
+    const m1v = n * p0 / ls[0];
+    if (ls.length <= 1) return m1v;
+    const cb = cbPrice(ls[0]);
+    return m1v + totalTRX * cb / ls[1];
   }
 
   const backup = calcB(levs);
   const initial = stakeVal + backup;
   const firstLiq = p0 * (1 + 1/levs[0]);
+  const callbackY = levs.length > 1 ? cbPrice(levs[0]) : 0;
 
   function run(ls) {
-    let c = calcB(ls), p = p0, r = 0, st = [];
-    for (const lv of ls) {
-      while (true) {
-        r++;
-        const ss = r <= 1 ? n : totalTRX;
-        const pos = ss * p;
-        const m = pos / lv;
-        if (m > c + 0.005) break;
-        const liq = p * (1 + 1/lv);
-        c -= m;
-        const sv = totalTRX * liq;
-        st.push({ round: r, lev: lv + 'x', entry: p, liq, margin: m, cashAfter: c, stakedVal: sv, total: sv + c, profit: sv + c - initial, shortAmt: ss });
-        p = liq; break;
-      }
+    const m1v = n * p0 / ls[0];
+    const l1v = p0 * (1 + 1/ls[0]);
+    const cb = ls.length > 1 ? cbPrice(ls[0]) : 0;
+    const steps = [];
+
+    // 第1轮
+    steps.push({ round: 1, lev: ls[0] + 'x', entry: p0, liq: l1v, margin: m1v, cashAfter: backup - m1v, stakedVal: totalTRX * l1v, total: totalTRX * l1v + backup - m1v, profit: totalTRX * l1v + backup - m1v - initial, shortAmt: n });
+
+    if (ls.length <= 1) {
+      const sv = totalTRX * l1v;
+      return { steps, finalPrice: l1v, cash: backup - m1v, stakedVal: sv, totalAsset: sv + backup - m1v, profit: sv + backup - m1v - initial, roi: ((sv + backup - m1v - initial) / initial) * 100 };
     }
-    const last = ls[ls.length - 1];
-    while (true) {
-      r++;
-      const ss = totalTRX;
-      const pos = ss * p;
-      const m = pos / last;
-      if (m > c + 0.005) break;
-      const liq = p * (1 + 1/last);
-      c -= m;
-      const sv = totalTRX * liq;
-      st.push({ round: r, lev: last + 'x', entry: p, liq, margin: m, cashAfter: c, stakedVal: sv, total: sv + c, profit: sv + c - initial, shortAmt: ss });
-      p = liq;
-    }
-    const sv = totalTRX * p;
-    return { steps: st, finalPrice: p, cash: c, stakedVal: sv, totalAsset: sv + c, profit: sv + c - initial, roi: ((sv + c - initial) / initial) * 100 };
+
+    // 第2轮（回调价）
+    const m2v = totalTRX * cb / ls[1];
+    const l2v = cb * (1 + 1/ls[1]);
+    const cash2 = backup - m1v - m2v;
+    steps.push({ round: 2, lev: ls[1] + 'x', entry: cb, liq: l2v, margin: m2v, cashAfter: cash2, stakedVal: totalTRX * l2v, total: totalTRX * l2v + cash2, profit: totalTRX * l2v + cash2 - initial, shortAmt: totalTRX });
+
+    const sv = totalTRX * l2v;
+    return { steps, finalPrice: l2v, cash: cash2, stakedVal: sv, totalAsset: sv + cash2, profit: sv + cash2 - initial, roi: ((sv + cash2 - initial) / initial) * 100 };
   }
 
   const res = run(levs);
