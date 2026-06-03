@@ -84,7 +84,7 @@ td.l{text-align:left;font-family:inherit}
         <th>净赚</th>
         <th>ROI</th>
         <th>总投入</th>
-        <th>操作</th>
+        <th>轮次</th>
       </tr>
     </thead>
     <tbody id="mainTable"></tbody>
@@ -146,9 +146,9 @@ function calc() {
     return { steps, finalPrice: l2, cash: cash2, stakedVal: sv, totalAsset: sv + cash2, profit: sv + cash2 - initial, roi: ((sv + cash2 - initial) / initial) * 100 };
   }
 
-  const combos = [[1,2],[2,2],[2,3]];
+  const combos = [[1,1],[1,2],[2,2],[2,3]];
   const labels = {
-    '1,2':'1x→2x','2,2':'2x→2x','2,3':'2x→3x'
+    '1,1':'1x→1x','1,2':'1x→2x','2,2':'2x→2x','2,3':'2x→3x'
   };
 
   const results = combos.map(c => ({ key: c.join(','), levs: c, result: runStrategy(c) }));
@@ -180,6 +180,7 @@ function calc() {
     opt.textContent = labels[r.key] + ' (' + r.result.roi.toFixed(2) + '%)';
     sel.appendChild(opt);
   });
+  document.getElementById('strategySelect').value = '1,1';
   document.getElementById('dailyTotal').textContent = dailyTRX.toFixed(3);
   document.getElementById('earnedTRX').textContent = earnedTRX.toFixed(2);
   calcDetail();
@@ -204,7 +205,7 @@ function calcDetail() {
   const earnedTRX = dailyTRX * days;
   const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
-  const levs = (document.getElementById('strategySelect').value || '2,3').split(',').map(Number);
+  const levs = (document.getElementById('strategySelect').value || '1,1').split(',').map(Number);
 
   function cbPrice(l1) {
     const m1vl = n * p0 / l1;
