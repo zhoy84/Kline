@@ -222,7 +222,7 @@ function calcDetail() {
 
   function row(cls, a, b, price, chg, short, cash, stake, total, profit) {
     const roi = initial > 0 ? (profit / initial) * 100 : 0;
-    return '<tr' + cls + '><td class="l">' + a + '</td><td>' + b + '</td><td>$' + (price > 0 ? price.toFixed(3) : '0') + '</td><td>' + chg + '</td><td class="' + (short >= 0 ? 'green' : 'red') + '">' + (short >= 0 ? '+' : '') + '$' + short.toFixed(2) + '</td><td>$' + cash.toFixed(2) + '</td><td>$' + stake.toFixed(2) + '</td><td>$' + total.toFixed(2) + '</td><td class="' + (profit >= 0 ? 'green' : 'red') + '">' + (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2) + '</td><td class="' + (roi >= 0 ? 'green' : 'red') + '">' + (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%</td></tr>';
+    return '<tr' + cls + '><td class="l">' + a + '</td><td class="l">' + b + '</td><td>$' + (price > 0 ? price.toFixed(3) : '0') + '</td><td>' + chg + '</td><td class="' + (short >= 0 ? 'green' : 'red') + '">' + (short >= 0 ? '+' : '') + '$' + short.toFixed(2) + '</td><td>$' + cash.toFixed(2) + '</td><td>$' + stake.toFixed(2) + '</td><td>$' + total.toFixed(2) + '</td><td class="' + (profit >= 0 ? 'green' : 'red') + '">' + (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2) + '</td><td class="' + (roi >= 0 ? 'green' : 'red') + '">' + (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%</td></tr>';
   }
 
   let html = '';
