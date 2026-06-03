@@ -34,8 +34,9 @@ td.l{text-align:left;font-family:inherit}
     <div class="g2"><label>开仓价格 $</label><input type="number" id="shortPrice" value="0.332" step="0.001"></div>
     <div class="g2"><label>质押数量 (TRX)</label><input type="number" id="stakeAmount" value="1649" step="1"></div>
     <div class="g2"><label>年化收益率 %</label><input type="number" id="apy" value="12.25" step="0.01"></div>
+    <div class="g2"><label>已质押天数</label><input type="number" id="daysStaked" value="60" min="1" step="1"></div>
   </div>
-  <div class="info">备用金 = 质押金额（全额对冲）· 选择策略查看明细 ↓</div>
+  <div class="info">备用金 = 质押金额（全额对冲）· 日收益率 = <span id="dailyYield">0.0336</span>% · 已获奖励 = <span id="earnedTRX">0.00</span> TRX</div>
 </div>
 
 <div class="card">
@@ -95,7 +96,10 @@ function calc() {
   const p0 = parseFloat(document.getElementById('shortPrice').value) || 0.332;
   const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0.332;
   const apy = (parseFloat(document.getElementById('apy').value) || 12.25) / 100;
-  const totalTRX = n + n * apy;
+  const days = parseFloat(document.getElementById('daysStaked').value) || 365;
+  const dailyRate = apy / 365;
+  const earnedTRX = n * dailyRate * days;
+  const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
   const backup = n * buyPrice;
   const initial = stakeVal + backup;
@@ -163,6 +167,8 @@ function calc() {
     opt.textContent = labels[r.key] + ' (' + r.result.roi.toFixed(2) + '%)';
     sel.appendChild(opt);
   });
+  document.getElementById('dailyYield').textContent = (dailyRate * 100).toFixed(4);
+  document.getElementById('earnedTRX').textContent = earnedTRX.toFixed(2);
   calcDetail();
 }
 
@@ -170,6 +176,7 @@ document.getElementById('buyPrice').addEventListener('input', calc);
 document.getElementById('shortPrice').addEventListener('input', calc);
 document.getElementById('stakeAmount').addEventListener('input', calc);
 document.getElementById('apy').addEventListener('input', calc);
+document.getElementById('daysStaked').addEventListener('input', calc);
 document.getElementById('strategySelect').addEventListener('change', calcDetail);
 
 function calcDetail() {
@@ -177,7 +184,10 @@ function calcDetail() {
   const p0 = parseFloat(document.getElementById('shortPrice').value) || 0.332;
   const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0.332;
   const apy = (parseFloat(document.getElementById('apy').value) || 12.25) / 100;
-  const totalTRX = n + n * apy;
+  const days = parseFloat(document.getElementById('daysStaked').value) || 365;
+  const dailyRate = apy / 365;
+  const earnedTRX = n * dailyRate * days;
+  const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
   const backup = n * buyPrice;
   const initial = stakeVal + backup;
