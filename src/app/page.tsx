@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import CoinSelector from "@/components/CoinSelector";
 import EventsTable, { exportEventsAsHtml } from "@/components/EventsTable";
 import DrawdownConfig from "@/components/DrawdownConfig";
+import StakingCalculator from "@/components/StakingCalculator";
 
 const KlineChart = dynamic(() => import("@/components/KlineChart"), { ssr: false });
 
@@ -35,6 +36,7 @@ interface NotableEvent {
 }
 
 export default function Home() {
+  const [tab, setTab] = useState<"kline" | "staking">("kline");
   const [coins, setCoins] = useState<Coin[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
   const [klines, setKlines] = useState<KlineData[]>([]);
@@ -143,55 +145,80 @@ export default function Home() {
             <span className="text-xs text-gray-500 hidden sm:inline">2020 ~ Now</span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-            <CoinSelector
-              coins={coins}
-              selected={selectedSymbol}
-              onSelect={setSelectedSymbol}
-            />
-            <DrawdownConfig
-              value={drawdownThreshold}
-              onChange={setDrawdownThreshold}
-              disabled={recomputing}
-              onBlur={handleRecompute}
-            />
+            <div className="flex bg-gray-800 rounded-lg p-0.5 mr-2">
+              <button
+                onClick={() => setTab("kline")}
+                className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                  tab === "kline" ? "bg-gray-700 text-gray-100" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                K线事件簿
+              </button>
+              <button
+                onClick={() => setTab("staking")}
+                className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                  tab === "staking" ? "bg-gray-700 text-gray-100" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                质押策略器
+              </button>
+            </div>
+            {tab === "kline" && (
+              <>
+                <CoinSelector
+                  coins={coins}
+                  selected={selectedSymbol}
+                  onSelect={setSelectedSymbol}
+                />
+                <DrawdownConfig
+                  value={drawdownThreshold}
+                  onChange={setDrawdownThreshold}
+                  disabled={recomputing}
+                  onBlur={handleRecompute}
+                />
+              </>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-4">
-        {loading ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-          </div>
-        ) : (
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Chart - full width on mobile, left 60% on desktop */}
-            <div className="w-full lg:w-[60%] min-h-[400px] lg:min-h-[600px] bg-[#1a1a2e] rounded-lg border border-gray-800">
-              <KlineChart data={klines} />
+        {tab === "kline" ? (
+          loading ? (
+            <div className="flex items-center justify-center h-96">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
             </div>
-
-            {/* Events Table - full width on mobile, right 40% on desktop */}
-            <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-300">
-                    历史事件记录
-                    <span className="text-xs text-gray-500 ml-2">({events.length})</span>
-                  </h2>
-                  <button
-                    onClick={handleExport}
-                    className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
-                  >
-                    导出
-                  </button>
+          ) : (
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Chart */}
+              <div className="w-full lg:w-[60%] min-h-[400px] lg:min-h-[600px] bg-[#1a1a2e] rounded-lg border border-gray-800">
+                <KlineChart data={klines} />
+              </div>
+              {/* Events Table */}
+              <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-300">
+                      历史事件记录
+                      <span className="text-xs text-gray-500 ml-2">({events.length})</span>
+                    </h2>
+                    <button
+                      onClick={handleExport}
+                      className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      导出
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
+                  <EventsTable events={events} coins={coins} selectedSymbol={selectedSymbol} />
                 </div>
               </div>
-              <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
-                <EventsTable events={events} coins={coins} selectedSymbol={selectedSymbol} />
-              </div>
             </div>
-          </div>
+          )
+        ) : (
+          <StakingCalculator />
         )}
       </main>
     </div>
