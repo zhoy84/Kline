@@ -16,7 +16,8 @@ input{width:100%;padding:7px 8px;border-radius:5px;border:1px solid #374151;back
 input:focus{outline:none;border-color:#60a5fa}
 .info{font-size:12px;color:#6b7280;display:flex;gap:16px;flex-wrap:wrap;padding:8px 0}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:6px 5px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;white-space:nowrap}
+th{text-align:right;padding:6px 5px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;white-space:nowrap}
+th.l{text-align:left}
 td{padding:5px;border-bottom:1px solid #1f2937;font-family:monospace;text-align:right;white-space:nowrap}
 td.l{text-align:left;font-family:inherit}
 .green{color:#34d399}
@@ -51,8 +52,8 @@ td.l{text-align:left;font-family:inherit}
   <table>
     <thead>
       <tr>
-        <th>场景</th>
-        <th>杠杆</th>
+        <th class="l">场景</th>
+        <th class="l">杠杆</th>
         <th>TRX 价</th>
         <th>涨跌幅</th>
         <th>短仓盈亏</th>
@@ -74,8 +75,8 @@ td.l{text-align:left;font-family:inherit}
   <table>
     <thead>
       <tr>
-        <th>排名</th>
-        <th>策略</th>
+        <th class="l">排名</th>
+        <th class="l">策略</th>
         <th>轮数</th>
         <th>止于价格</th>
         <th>涨幅</th>
