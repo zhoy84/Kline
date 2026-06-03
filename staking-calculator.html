@@ -83,7 +83,7 @@ td.l{text-align:left;font-family:inherit}
         <th>总资产</th>
         <th>净赚</th>
         <th>ROI</th>
-        <th>备用</th>
+        <th>总投入</th>
         <th>操作</th>
       </tr>
     </thead>
@@ -179,8 +179,8 @@ function calc() {
     const chg = ((res.finalPrice / p0) - 1) * 100;
     const ops = res.steps.length;
     const rc = i === 0 ? ' class="highlight"' : '';
-    const reqBackup = res.steps.reduce((sum, s) => sum + s.margin, 0);
-    const bStr = '$' + reqBackup.toFixed(2);
+    const totalCapital = stakeVal + res.steps.reduce((sum, s) => sum + s.margin, 0);
+    const bStr = '$' + totalCapital.toFixed(2);
     html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '</td><td>' + bStr + '</td><td>' + res.steps.map(s => (s.shortAmt ? s.shortAmt.toFixed(0) : '') + s.lev).join('→') + '</td></tr>';
   });
   document.getElementById('mainTable').innerHTML = html;
@@ -217,6 +217,7 @@ function calcDetail() {
   const earnedTRX = dailyTRX * days;
   const totalTRX = n + earnedTRX;
   const stakeVal = n * p0;
+  const levs = (document.getElementById('strategySelect').value || '2,3').split(',').map(Number);
 
   // 同 calc 的 calcBackup
   function calcB(ls) {
