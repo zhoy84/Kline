@@ -249,13 +249,60 @@ function calcDetail() {
 
   const sel = document.getElementById('strategySelect').value;
   const levs = sel.split(',').map(Number);
+  const firstLiq = p0 * (1 + 1/levs[0]);
   const res = run(levs);
-  let html = '';
-  for (const s of res.steps) {
-    const chg = ((s.liq / p0) - 1) * 100;
-    html += '<tr><td>' + s.round + '</td><td>' + s.lev + '</td><td>$' + s.entry.toFixed(3) + '</td><td>$' + s.liq.toFixed(3) + ' (+' + chg.toFixed(1) + '%)</td><td class="red">-$' + s.margin.toFixed(2) + '</td><td>$' + s.cashAfter.toFixed(2) + '</td><td>$' + s.stakedVal.toFixed(2) + '</td><td>$' + s.total.toFixed(2) + '</td><td class="green">+$' + s.profit.toFixed(2) + '</td></tr>';
+
+  // 未爆仓前通用场景（所有策略都一样）
+  const scenarios = [
+    { label: '归零', p: 0 },
+    { label: '跌 75%', p: p0 * 0.25 },
+    { label: '跌 50%', p: p0 * 0.5 },
+    { label: '跌 25%', p: p0 * 0.75 },
+    { label: '不变', p: p0 },
+    { label: '涨 25%（未爆）', p: p0 * 1.25 }
+  ];
+  // Filter to only show alive scenarios for this strategy
+  const aliveScenarios = scenarios.filter(s => s.p < firstLiq);
+
+  let html = '<tr style="background:rgba(96,165,250,0.06)"><td colspan="9" style="text-align:center;color:#60a5fa;font-weight:600">📌 通用（本策略未爆仓前，所有策略收益一致）</td></tr>';
+  for (const s of aliveScenarios) {
+    const total = totalTRX * s.p + backup + n * p0 - n * s.p;
+    const profit = total - initial;
+    const chg = s.p > 0 ? ((s.p/p0)-1)*100 : -100;
+    // Short PnL at this price
+    const shortPnl = n * (p0 - s.p);
+    html += '<tr><td></td><td></td><td>$' + (s.p > 0 ? s.p.toFixed(3) : '0') + '</td><td>' + (chg.toFixed(1) + '%') + '</td><td class="' + (shortPnl >= 0 ? 'green' : 'red') + '">' + (shortPnl >= 0 ? '+' : '') + '$' + shortPnl.toFixed(2) + '</td><td>$' + (backup - (res.steps.length > 0 ? res.steps[0].margin * 0 : 0)).toFixed(2) + '</td><td>$' + (totalTRX * (s.p || 0.001)).toFixed(2) + '</td><td>$' + total.toFixed(2) + '</td><td class="' + (profit >= 0 ? 'green' : 'red') + '">' + (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2) + '</td></tr>';
   }
-  html += '<tr class="highlight"><td colspan="9" style="text-align:center;color:#fb923c">❌ 现金耗尽，终局 $' + res.finalPrice.toFixed(3) + '（+' + (((res.finalPrice/p0)-1)*100).toFixed(1) + '%），净赚 +$' + res.profit.toFixed(2) + '，ROI ' + res.roi.toFixed(2) + '%</td></tr>';
+
+  // 爆仓链
+  if (res.steps.length > 0) {
+    html += '<tr style="background:rgba(251,146,60,0.06)"><td colspan="9" style="text-align:center;color:#fb923c;font-weight:600">🔥 爆仓链（本策略特有）</td></tr>';
+    for (const s of res.steps) {
+      const chg = ((s.liq / p0) - 1) * 100;
+      const shortPnl = -s.margin; // at liquidation, margin is lost
+      html += '<tr><td>' + s.round + '</td><td>' + s.lev + '</td><td>$' + s.entry.toFixed(3) + '</td><td>$' + s.liq.toFixed(3) + ' (+' + chg.toFixed(1) + '%)</td><td class="red">-$' + s.margin.toFixed(2) + '</td><td>$' + s.cashAfter.toFixed(2) + '</td><td>$' + s.stakedVal.toFixed(2) + '</td><td>$' + s.total.toFixed(2) + '</td><td class="green">+$' + s.profit.toFixed(2) + '</td></tr>';
+    }
+  }
+
+  // 裸奔后参考场景
+  if (res.cash < 1) {
+    html += '<tr style="background:rgba(239,68,68,0.06)"><td colspan="9" style="text-align:center;color:#f87171;font-weight:600">⚠️ 裸奔期（空单已尽，无保护）</td></tr>';
+    const nakedPrices = [
+      { label: '持平', p: res.finalPrice },
+      { label: '跌 10%', p: res.finalPrice * 0.9 },
+      { label: '跌 20%', p: res.finalPrice * 0.8 },
+      { label: '跌到保本', p: initial / totalTRX },
+    ];
+    for (const s of nakedPrices) {
+      const total = totalTRX * s.p + res.cash;
+      const profit = total - initial;
+      const chg = ((s.p / p0) - 1) * 100;
+      const status = profit >= 0 ? '🟢' : '🔴';
+      html += '<tr><td></td><td></td><td>$' + s.p.toFixed(3) + '</td><td>' + chg.toFixed(1) + '%</td><td class="red">-$0</td><td>$' + res.cash.toFixed(2) + '</td><td>$' + (totalTRX * s.p).toFixed(2) + '</td><td>$' + total.toFixed(2) + '</td><td class="' + (profit >= 0 ? 'green' : 'red') + '">' + status + '$' + profit.toFixed(2) + '</td></tr>';
+    }
+  }
+
+  html += '<tr class="highlight"><td colspan="9" style="text-align:center;color:#fb923c">❌ 终局: $' + res.finalPrice.toFixed(3) + '（+' + (((res.finalPrice/p0)-1)*100).toFixed(1) + '%），总资产 $' + res.totalAsset.toFixed(2) + '，净赚 +$' + res.profit.toFixed(2) + '（ROI ' + res.roi.toFixed(2) + '%）</td></tr>';
   document.getElementById('detailTable').innerHTML = html;
 }
 
