@@ -194,39 +194,7 @@ function calc() {
   });
 
   // Detail of selected
-  updateDetail(results, labels, p0);
-}
-
-function updateDetail(results, labels, p0) {
-  const sel = document.getElementById('strategySelect').value;
-  const r = results.find(x => x.key === sel);
-  if (!r) return;
-  
-  let html = '';
-  const steps = r.result.steps;
-  if (steps.length === 0) {
-    html = '<tr><td colspan="9" style="text-align:center;color:#6b7280">无法开仓（保证金不足）</td></tr>';
-  }
-  for (const s of steps) {
-    const chg = ((s.liq / p0) - 1) * 100;
-    html += '<tr>';
-    html += '<td>' + s.round + '</td>';
-    html += '<td>' + s.lev + '</td>';
-    html += '<td>$' + s.entry.toFixed(3) + '</td>';
-    html += '<td>$' + s.liq.toFixed(3) + ' (+' + chg.toFixed(1) + '%)</td>';
-    html += '<td class="red">-$' + s.margin.toFixed(2) + '</td>';
-    html += '<td>$' + s.cashAfter.toFixed(2) + '</td>';
-    html += '<td>$' + s.stakedVal.toFixed(2) + '</td>';
-    html += '<td>$' + s.total.toFixed(2) + '</td>';
-    html += '<td class="green">+$' + s.profit.toFixed(2) + '</td>';
-    html += '</tr>';
-  }
-  // Final state
-  const f = r.result;
-  html += '<tr class="highlight"><td colspan="9" style="text-align:center;color:#fb923c">❌ 现金耗尽，无法继续开仓</td></tr>';
-  html += '<tr class="highlight"><td colspan="2">终局</td><td colspan="2">$' + f.finalPrice.toFixed(3) + '（+' + (((f.finalPrice/p0)-1)*100).toFixed(1) + '%）</td>';
-  html += '<td colspan="2">现金剩 $' + f.cash.toFixed(2) + '</td><td colspan="2">净赚 +$' + f.profit.toFixed(2) + ' → ' + f.roi.toFixed(2) + '%</td><td></td></tr>';
-  document.getElementById('detailTable').innerHTML = html;
+  calcDetail();
 }
 
 document.getElementById('buyPrice').addEventListener('input', calc);
@@ -234,14 +202,64 @@ document.getElementById('shortPrice').addEventListener('input', calc);
 document.getElementById('stakeAmount').addEventListener('input', calc);
 document.getElementById('apy').addEventListener('input', calc);
 document.getElementById('strategySelect').addEventListener('change', function() {
-  updateDetail(
-    [...document.querySelectorAll('#mainTable tr')].map(() => {}),
-    {},
-    0
-  );
-  // Re-fetch results by recalculating
-  calc();
+  calcDetail();
 });
+
+function calcDetail() {
+  const n = parseFloat(document.getElementById('stakeAmount').value) || 1649;
+  const p0 = parseFloat(document.getElementById('shortPrice').value) || 0.332;
+  const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0.332;
+  const apy = (parseFloat(document.getElementById('apy').value) || 12.25) / 100;
+  const totalTRX = n + n * apy;
+  const stakeVal = n * p0;
+  const backup = n * buyPrice;
+  const initial = stakeVal + backup;
+
+  function run(levs) {
+    let cash = backup, price = p0, round = 0, steps = [];
+    for (const lev of levs) {
+      while (true) {
+        round++;
+        const pos = n * price;
+        const margin = pos / lev;
+        if (margin > cash + 0.005) break;
+        const liq = price * (1 + 1/lev);
+        cash -= margin;
+        const sv = totalTRX * liq;
+        steps.push({ round, lev: lev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, total: sv + cash, profit: sv + cash - initial });
+        price = liq;
+        break;
+      }
+    }
+    const lastLev = levs[levs.length-1];
+    while (true) {
+      round++;
+      const pos = n * price;
+      const margin = pos / lastLev;
+      if (margin > cash + 0.005) break;
+      const liq = price * (1 + 1/lastLev);
+      cash -= margin;
+      const sv = totalTRX * liq;
+      steps.push({ round, lev: lastLev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, total: sv + cash, profit: sv + cash - initial });
+      price = liq;
+    }
+    const sv = totalTRX * price;
+    return { steps, finalPrice: price, cash, stakedVal: sv, totalAsset: sv + cash, profit: sv + cash - initial, roi: ((sv + cash - initial) / initial) * 100 };
+  }
+
+  const sel = document.getElementById('strategySelect').value;
+  const levs = sel.split(',').map(Number);
+  const res = run(levs);
+  let html = '';
+  for (const s of res.steps) {
+    const chg = ((s.liq / p0) - 1) * 100;
+    html += '<tr><td>' + s.round + '</td><td>' + s.lev + '</td><td>$' + s.entry.toFixed(3) + '</td><td>$' + s.liq.toFixed(3) + ' (+' + chg.toFixed(1) + '%)</td><td class="red">-$' + s.margin.toFixed(2) + '</td><td>$' + s.cashAfter.toFixed(2) + '</td><td>$' + s.stakedVal.toFixed(2) + '</td><td>$' + s.total.toFixed(2) + '</td><td class="green">+$' + s.profit.toFixed(2) + '</td></tr>';
+  }
+  html += '<tr class="highlight"><td colspan="9" style="text-align:center;color:#fb923c">❌ 现金耗尽，终局 $' + res.finalPrice.toFixed(3) + '（+' + (((res.finalPrice/p0)-1)*100).toFixed(1) + '%），净赚 +$' + res.profit.toFixed(2) + '，ROI ' + res.roi.toFixed(2) + '%</td></tr>';
+  document.getElementById('detailTable').innerHTML = html;
+}
+
+
 
 calc();
 </script>
