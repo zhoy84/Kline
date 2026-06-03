@@ -52,7 +52,7 @@ td.l{text-align:left;font-family:inherit}
         <th class="l">场景</th>
         <th class="l">杠杆</th>
         <th>TRX 价</th>
-        <th>合约价值</th>
+        <th>平仓价值</th>
         <th>涨跌幅</th>
         <th>短仓盈亏</th>
         <th>可用现金</th>
@@ -235,7 +235,9 @@ function calcDetail() {
       const total = totalTRX * s.p + backup + n * p0 - n * s.p;
       const profit = total - initial;
       const chg = s.p > 0 ? ((s.p/p0-1)*100).toFixed(1)+'%' : '-100%';
-      html += row('', '-', '-', s.p, chg, n * s.p, shortPnl, backup, totalTRX * (s.p || 0.001), total, profit);
+      const margin1 = n * p0 / levs[0];
+      const closeVal = Math.max(0, margin1 + shortPnl);
+      html += row('', '-', '-', s.p, chg, closeVal, shortPnl, backup, totalTRX * (s.p || 0.001), total, profit);
     }
   }
 
@@ -244,7 +246,7 @@ function calcDetail() {
     html += '<tr style="background:rgba(251,146,60,0.06)"><td colspan="11" style="text-align:center;color:#fb923c;font-weight:600">🔥 爆仓链（本策略特有，逐轮消耗保证金）</td></tr>';
     for (const s of res.steps) {
       const chg = '+' + ((s.liq/p0-1)*100).toFixed(1) + '%';
-      html += row('', '第'+s.round+'轮', s.lev, s.entry, chg, n * s.entry, -s.margin, s.cashAfter, s.stakedVal, s.total, s.profit);
+      html += row('', '第'+s.round+'轮', s.lev, s.entry, chg, 0, -s.margin, s.cashAfter, s.stakedVal, s.total, s.profit);
     }
   }
 
