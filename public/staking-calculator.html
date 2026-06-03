@@ -207,7 +207,7 @@ function calcDetail() {
   const alivePts = [{l:'归零',p:0},{l:'跌75%',p:p0*0.25},{l:'跌50%',p:p0*0.5},{l:'跌25%',p:p0*0.75},{l:'不变',p:p0},{l:'涨25%未爆',p:p0*1.25}];
   const showAlive = alivePts.filter(s => s.p < firstLiq);
   if (showAlive.length) {
-    html += '<tr style="background:rgba(96,165,250,0.06)"><td colspan="10" style="text-align:center;color:#60a5fa;font-weight:600">📌 未爆仓（所有策略收益一致，空单正常保护）</td></tr>';
+    html += '<tr style="background:rgba(96,165,250,0.06)"><td colspan="11" style="text-align:center;color:#60a5fa;font-weight:600">📌 未爆仓（所有策略收益一致，空单正常保护）</td></tr>';
     for (const s of showAlive) {
       const shortPnl = n * (p0 - s.p);
       const total = totalTRX * s.p + backup + n * p0 - n * s.p;
@@ -219,7 +219,7 @@ function calcDetail() {
 
   // --- Liquidation chain ---
   if (res.steps.length) {
-    html += '<tr style="background:rgba(251,146,60,0.06)"><td colspan="10" style="text-align:center;color:#fb923c;font-weight:600">🔥 爆仓链（本策略特有，逐轮消耗保证金）</td></tr>';
+    html += '<tr style="background:rgba(251,146,60,0.06)"><td colspan="11" style="text-align:center;color:#fb923c;font-weight:600">🔥 爆仓链（本策略特有，逐轮消耗保证金）</td></tr>';
     for (const s of res.steps) {
       const chg = '+' + ((s.liq/p0-1)*100).toFixed(1) + '%';
       html += row('', '第'+s.round+'轮', s.lev, s.entry, chg, n * s.entry, -s.margin, s.cashAfter, s.stakedVal, s.total, s.profit);
@@ -228,7 +228,7 @@ function calcDetail() {
 
   // --- Naked scenarios ---
   if (res.cash < 1) {
-    html += '<tr style="background:rgba(239,68,68,0.06)"><td colspan="10" style="text-align:center;color:#f87171;font-weight:600">⚠️ 裸奔期（空单耗尽，无保护，只靠质押 TRX）</td></tr>';
+    html += '<tr style="background:rgba(239,68,68,0.06)"><td colspan="11" style="text-align:center;color:#f87171;font-weight:600">⚠️ 裸奔期（空单耗尽，无保护，只靠质押 TRX）</td></tr>';
     const nakedPts = [
       {l:'持平', p:res.finalPrice},
       {l:'跌10%', p:res.finalPrice*0.9},
