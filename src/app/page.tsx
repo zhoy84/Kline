@@ -163,7 +163,7 @@ export default function Home() {
                 质押策略器
               </button>
             </div>
-            {tab === "kline" && <span className="text-xs text-gray-600">K-line Lab</span>}
+
           </div>
         </div>
       </header>
