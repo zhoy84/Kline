@@ -167,14 +167,14 @@ function calc() {
     const chg = ((res.finalPrice / p0) - 1) * 100;
     const ops = res.steps.length;
     const rc = i === 0 ? ' class="highlight"' : '';
-    // 检查第二轮现金是否够
-    let backupOk = true;
-    if (r.levs.length > 1 && res.steps.length >= 2) {
-      backupOk = res.steps[0].cashAfter >= res.steps[1].margin;
+    // 计算最低备用金（足够开完第二轮）
+    let minBackup = backup;
+    if (r.levs.length > 1 && res.steps.length >= 1) {
+      const gap = res.steps[1] ? res.steps[1].margin - res.steps[0].cashAfter : 0;
+      if (gap > 0.01) minBackup = backup + gap;
     }
-    const bIcon = backupOk ? '🟢' : '🔴';
-    const bTitle = backupOk ? '充足' : '不够';
-    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '%</td><td>' + bIcon + '</td><td>' + res.steps.map(s => (s.shortAmt ? s.shortAmt.toFixed(0) : '') + s.lev).join('→') + '</td></tr>';
+    const minBStr = minBackup !== backup ? '$' + minBackup.toFixed(2) : '—';
+    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '</td><td>' + minBStr + '</td><td>' + res.steps.map(s => (s.shortAmt ? s.shortAmt.toFixed(0) : '') + s.lev).join('→') + '</td></tr>';
   });
   document.getElementById('mainTable').innerHTML = html;
 
