@@ -150,7 +150,8 @@ function calc() {
 
   const results = combos.map(c => ({ key: c.join(','), levs: c, result: runStrategy(c) }));
   results.sort((a, b) => {
-  if (b.result.roi !== a.result.roi) return b.result.roi - a.result.roi;
+  const diff = b.result.roi - a.result.roi;
+  if (Math.abs(diff) > 0.001) return diff;
   const pa = a.result.steps[0]?.profit || 0;
   const pb = b.result.steps[0]?.profit || 0;
   return pb - pa;
