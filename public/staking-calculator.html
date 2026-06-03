@@ -236,8 +236,9 @@ function calcDetail() {
       const profit = total - initial;
       const chg = s.p > 0 ? ((s.p/p0-1)*100).toFixed(1)+'%' : '-100%';
       const margin1 = n * p0 / levs[0];
+      const freeCash = backup - margin1;
       const closeVal = Math.max(0, margin1 + shortPnl);
-      html += row('', '-', '-', s.p, chg, closeVal, shortPnl, backup, totalTRX * (s.p || 0.001), total, profit);
+      html += row('', '-', '-', s.p, chg, closeVal, shortPnl, freeCash, totalTRX * (s.p || 0.001), total, profit);
     }
   }
 
