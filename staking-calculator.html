@@ -3,284 +3,245 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TRX 质押+做空 收益计算器</title>
+<title>TRX 做空杠杆策略计算器</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f1a;color:#d1d5db;padding:20px;font-size:15px}
-h1{font-size:22px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:20px}
-h2{font-size:16px;font-weight:600;color:#e5e7eb;margin:16px 0 8px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f1a;color:#d1d5db;padding:20px;font-size:14px}
+h1{font-size:20px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px}
 .card{background:#1a1a2e;border:1px solid #1f2937;border-radius:8px;padding:16px;margin-bottom:12px}
-.row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
-.col{flex:1;min-width:140px}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px}
+.g2{flex:1;min-width:130px}
 label{display:block;font-size:12px;color:#9ca3af;margin-bottom:3px}
-input{width:100%;padding:8px 10px;border-radius:5px;border:1px solid #374151;background:#111827;color:#e5e7eb;font-size:14px;font-family:monospace}
+input{width:100%;padding:7px 8px;border-radius:5px;border:1px solid #374151;background:#111827;color:#e5e7eb;font-size:13px;font-family:monospace}
 input:focus{outline:none;border-color:#60a5fa}
-input[type=range]{padding:0;border:none;background:transparent;accent-color:#60a5fa}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th{text-align:left;padding:8px 6px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600}
-td{padding:8px 6px;border-bottom:1px solid #1f2937;font-family:monospace;text-align:right}
-td:first-child{text-align:left;color:#9ca3af;font-family:inherit}
-.val{color:#34d399}
-.neg{color:#f87171}
-.neu{color:#d1d5db}
-.highlight{background:rgba(96,165,250,0.1)}
-.slider-label{display:flex;justify-content:space-between;font-size:12px;color:#6b7280;margin-top:2px}
-.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:500}
-.badge-green{background:rgba(20,83,45,0.3);color:#4ade80;border:1px solid #15803d}
-.badge-red{background:rgba(127,29,29,0.3);color:#f87171;border:1px solid #b91c1c}
-.badge-blue{background:rgba(22,78,99,0.3);color:#22d3ee;border:1px solid #0e7490}
-.badge-orange{background:rgba(124,45,18,0.3);color:#fb923c;border:1px solid #c2410c}
+.info{font-size:12px;color:#6b7280;display:flex;gap:16px;flex-wrap:wrap;padding:8px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:6px 5px;border-bottom:1px solid #374151;color:#9ca3af;font-weight:600;white-space:nowrap}
+td{padding:5px;border-bottom:1px solid #1f2937;font-family:monospace;text-align:right;white-space:nowrap}
+td.l{text-align:left;font-family:inherit}
+.green{color:#34d399}
+.red{color:#f87171}
+.blue{color:#60a5fa}
+.orange{color:#fb923c}
+.highlight{background:rgba(96,165,250,0.08)}
 </style>
 </head>
 <body>
 
-<h1>📊 TRX 质押 + 做空 收益计算器</h1>
+<h1>📊 TRX 做空杠杆策略收益计算器</h1>
 
 <div class="card">
   <div class="row">
-    <div class="col">
-      <label>质押价格 (买入价) $</label>
-      <input type="number" id="buyPrice" value="0.332" step="0.001">
-    </div>
-    <div class="col">
-      <label>开仓价格 (做空价) $</label>
-      <input type="number" id="shortPrice" value="0.332" step="0.001">
-    </div>
-    <div class="col">
-      <label>质押数量 (TRX)</label>
-      <input type="number" id="stakeAmount" value="1649" step="1">
-    </div>
-    <div class="col">
-      <label>年化收益率 %</label>
-      <input type="number" id="apy" value="12.25" step="0.01">
-    </div>
-    <div class="col">
-      <label>备灾现金 $</label>
-      <input type="number" id="backupCash" value="274" step="1">
-    </div>
+    <div class="g2"><label>质押价格 $</label><input type="number" id="buyPrice" value="0.332" step="0.001"></div>
+    <div class="g2"><label>开仓价格 $</label><input type="number" id="shortPrice" value="0.332" step="0.001"></div>
+    <div class="g2"><label>质押数量 (TRX)</label><input type="number" id="stakeAmount" value="1649" step="1"></div>
+    <div class="g2"><label>年化收益率 %</label><input type="number" id="apy" value="12.25" step="0.01"></div>
   </div>
+  <div class="info">备用金 = 质押金额（全额对冲）</div>
 </div>
 
 <div class="card">
-  <h2>📌 出口价格设定</h2>
-  <div style="margin-bottom:4px">
-    <span class="badge badge-red">跌</span>
-    <span class="badge badge-blue">不变</span>
-    <span class="badge badge-orange">涨 25%</span>
-    <span class="badge badge-green">爆仓线</span>
-  </div>
-  <input type="range" id="exitPriceSlider" min="0" max="0.70" step="0.001" value="0.332">
-  <div class="slider-label">
-    <span>$0</span>
-    <span id="exitPriceDisplay">$0.332</span>
-    <span>$0.70</span>
-  </div>
-</div>
-
-<h2>🔍 四种场景收益对比</h2>
-
-<div class="card">
+  <h2 style="font-size:15px;font-weight:600;color:#e5e7eb;margin-bottom:8px">📋 全部组合策略对比</h2>
+  <div style="overflow-x:auto">
   <table>
     <thead>
       <tr>
-        <th style="width:22%">场景</th>
-        <th>出口价</th>
-        <th>质押价值</th>
-        <th>短仓盈亏</th>
-        <th>剩余现金</th>
+        <th>排名</th>
+        <th>策略</th>
+        <th>轮数</th>
+        <th>止于价格</th>
+        <th>涨幅</th>
         <th>总资产</th>
         <th>净赚</th>
-        <th>收益率</th>
+        <th>ROI</th>
+        <th>每次操作</th>
       </tr>
     </thead>
-    <tbody id="resultBody">
-    </tbody>
+    <tbody id="mainTable"></tbody>
   </table>
+  </div>
 </div>
 
-<h2>📈 各价格下完整收益曲线</h2>
 <div class="card">
+  <h2 style="font-size:15px;font-weight:600;color:#e5e7eb;margin-bottom:8px">🔍 选中策略明细</h2>
+  <div style="margin-bottom:8px">
+    <label style="font-size:13px;color:#d1d5db">选择策略：
+    <select id="strategySelect" style="background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:4px;padding:4px 8px;font-size:13px;margin-left:8px"></select>
+    </label>
+  </div>
+  <div style="overflow-x:auto">
   <table>
     <thead>
       <tr>
-        <th>TRX 涨跌幅</th>
-        <th>出口价</th>
-        <th>2x 年化</th>
-        <th>2x→10x 逃生年化</th>
+        <th>轮次</th>
+        <th>杠杆</th>
+        <th>开仓价</th>
+        <th>爆仓价</th>
+        <th>亏保证金</th>
+        <th>剩余现金</th>
+        <th>质押价值</th>
+        <th>总资产</th>
+        <th>此轮净赚</th>
       </tr>
     </thead>
-    <tbody id="curveBody">
-    </tbody>
+    <tbody id="detailTable"></tbody>
   </table>
+  </div>
 </div>
 
 <script>
 function calc() {
-  const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0;
-  const shortPrice = parseFloat(document.getElementById('shortPrice').value) || 0;
-  const stakeAmount = parseFloat(document.getElementById('stakeAmount').value) || 0;
-  const apy = parseFloat(document.getElementById('apy').value) || 0;
-  const backupCash = parseFloat(document.getElementById('backupCash').value) || 0;
-  const sliderVal = parseFloat(document.getElementById('exitPriceSlider').value);
+  const n = parseFloat(document.getElementById('stakeAmount').value) || 1649;
+  const p0 = parseFloat(document.getElementById('shortPrice').value) || 0.332;
+  const buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0.332;
+  const apy = (parseFloat(document.getElementById('apy').value) || 12.25) / 100;
+  const totalTRX = n + n * apy;
+  const stakeVal = n * p0;
+  const backup = n * buyPrice;  // 备用金 = 买入成本
+  const initial = stakeVal + backup;
 
-  const rewardTRX = stakeAmount * apy / 100;
-  const totalTRXAfter = stakeAmount + rewardTRX;
-  const stakeCost = stakeAmount * buyPrice;
-  const shortValue = stakeAmount * shortPrice;
-
-  // 2x short margin
-  const margin2x = shortValue / 2;
-  const totalCapital = stakeCost + margin2x;
-
-  // 2x liquidation price
-  const liquidationPrice2x = shortPrice * 1.5;
-
-  // 10x emergency (full backup as margin at 10x)
-  const margin10x = backupCash;  // 全部备灾金
-  const shortValue10x = margin10x * 10;
-  const trxShort10x = shortValue10x / liquidationPrice2x;
-  const liqPx10x = liquidationPrice2x * 1.1; // 10x: 涨 10% 就爆
-
-  // Helper: 2x survive scenario
-  function calc2x(exitPrice) {
-    const stakedVal = totalTRXAfter * exitPrice;
-    const shortPnl = stakeAmount * (shortPrice - exitPrice);
-    const capitalReturned = margin2x + shortValue;
-    const cash = capitalReturned - (stakeAmount * exitPrice);
-
-    // At exit, cash goes: capitalReturned - buyBackCost
-    const buyBackCost = stakeAmount * exitPrice;
-    const remainingCash = capitalReturned - buyBackCost;
-    const totalAsset = stakedVal + remainingCash;
-    const netProfit = totalAsset - totalCapital;
-    const roi = totalCapital > 0 ? (netProfit / totalCapital) * 100 : 0;
-    return { totalAsset, netProfit, roi, shortPnl, stakedVal, remainingCash };
+  function runStrategy(levs) {
+    let cash = backup, price = p0, round = 0, steps = [];
+    
+    for (const lev of levs) {
+      while (true) {
+        round++;
+        const pos = n * price;
+        const margin = pos / lev;
+        if (margin > cash + 0.005) {
+          const sv = totalTRX * price;
+          return { steps, finalPrice: price, cash, stakedVal: sv, 
+                   totalAsset: sv + cash, profit: sv + cash - initial,
+                   roi: ((sv + cash - initial) / initial) * 100 };
+        }
+        const liq = price * (1 + 1/lev);
+        cash -= margin;
+        const sv = totalTRX * liq;
+        steps.push({ round, lev: lev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv, 
+                     total: sv + cash, profit: sv + cash - initial });
+        price = liq;
+        break;
+      }
+    }
+    
+    const lastLev = levs[levs.length-1];
+    while (true) {
+      round++;
+      const pos = n * price;
+      const margin = pos / lastLev;
+      if (margin > cash + 0.005) break;
+      const liq = price * (1 + 1/lastLev);
+      cash -= margin;
+      const sv = totalTRX * liq;
+      steps.push({ round, lev: lastLev + 'x', entry: price, liq, margin, cashAfter: cash, stakedVal: sv,
+                   total: sv + cash, profit: sv + cash - initial });
+      price = liq;
+    }
+    
+    const sv = totalTRX * price;
+    return { steps, finalPrice: price, cash, stakedVal: sv,
+             totalAsset: sv + cash, profit: sv + cash - initial,
+             roi: ((sv + cash - initial) / initial) * 100 };
   }
 
-  // Scenario 1: 2x survives, exit at slider price
-  const exitPrice = sliderVal;
-  const s1 = calc2x(exitPrice);
-  const isLiquidated = exitPrice >= liquidationPrice2x;
-
-  // Scenario 2: 2x survives, exit at -25% (if above liquidation)
-  const downPrice = Math.max(shortPrice * 0.75, 0.001);
-  const s2 = calc2x(downPrice);
-
-  // Emergency calc: 2x爆后 → 全仓10x做空维稳14天
-  function calcEmergency(exitPrice, liqPrice) {
-    const stakedVal = totalTRXAfter * exitPrice;        // 质押最终价值
-    const loss2x = margin2x;                             // 2x 保证金亏光
-    // 10x 紧急短仓
-    const emMargin = backupCash;                         // 全部备灾金
-    const emPosSize = emMargin * 10;                     // 10x
-    const emShortTrx = emPosSize / liqPrice;             // 做空 TRX 数量
-    const emPnL = emShortTrx * (liqPrice - exitPrice);   // 空单盈亏
-    // 10x 爆仓价 = liqPrice × 1.1
-    const emLiquidated = exitPrice > liqPrice * 1.1;
-    const emReturn = emLiquidated ? 0 : emMargin + emPnL;
-    const total = stakedVal + emReturn;
-    const profit = total - totalCapital;
-    const roi = totalCapital > 0 ? (profit / totalCapital) * 100 : 0;
-    return { stakedVal, emReturn, total, profit, roi, emLiquidated };
-  }
-
-  // Scenario 3: 爆仓后 TRX 继续涨到出口价
-  const upExit = Math.max(exitPrice, liquidationPrice2x);
-  const s3 = calcEmergency(upExit, liquidationPrice2x);
-  // Show note if 10x also liquidated
-  const s3Note = s3.emLiquidated ? '⚠️ 10x 也爆了' : '10x 存活';
-
-  // Scenario 4: 爆仓后 TRX 跌到出口价
-  const downExit4 = Math.max(liquidationPrice2x * 0.8, 0.001);
-  const s4 = calcEmergency(downExit4, liquidationPrice2x);
-
-  function fmt(v) { return v.toFixed(2); }
-  function fmtD(v) { return v >= 0 ? '<span class="val">$' + fmt(v) + '</span>' : '<span class="neg">-$' + fmt(Math.abs(v)) + '</span>'; }
-  function fmtR(v) { return v >= 0 ? '<span class="val">+' + fmt(v) + '%</span>' : '<span class="neg">' + fmt(v) + '%</span>'; }
-  function fmtA(v) { return '$' + fmt(v); }
-
-  const rows = [
-    [
-      '1️⃣ 2x没爆·不变', '',
-      s1, false
-    ],
-    [
-      '2️⃣ 2x没爆·跌', '',
-      s2, false
-    ],
-    [
-      '3️⃣ 2x爆→10x→涨',
-      '2x爆仓 @ $' + fmt(liquidationPrice2x) + '，' + s3Note,
-      { totalAsset: s3.total, netProfit: s3.profit, roi: s3.roi, shortPnl: -(margin2x + (s3.emLiquidated ? backupCash : 0)), stakedVal: s3.stakedVal, remainingCash: s3.emReturn },
-      true
-    ],
-    [
-      '4️⃣ 2x爆→10x→跌',
-      '2x爆仓 @ $' + fmt(liquidationPrice2x),
-      { totalAsset: s4.total, netProfit: s4.profit, roi: s4.roi, shortPnl: -(margin2x + (s4.emLiquidated ? backupCash : 0)), stakedVal: s4.stakedVal, remainingCash: s4.emReturn },
-      true
-    ]
+  const combos = [
+    [2], [3], [5], [10],
+    [2,3], [2,5], [2,10], [3,2], [3,5], [3,10],
+    [5,10], [5,2], [2,3,5], [2,5,10], [3,5,10], [2,3,5,10]
   ];
+  
+  const labels = {
+    '2': '2x', '3': '3x', '5': '5x', '10': '10x',
+    '2,3': '2→3x', '2,5': '2→5x', '2,10': '2→10x',
+    '3,2': '3→2x', '3,5': '3→5x', '3,10': '3→10x',
+    '5,10': '5→10x', '5,2': '5→2x',
+    '2,3,5': '2→3→5x', '2,5,10': '2→5→10x',
+    '3,5,10': '3→5→10x', '2,3,5,10': '2→3→5→10x'
+  };
 
+  const results = combos.map(c => ({ key: c.join(','), levs: c, result: runStrategy(c) }));
+  results.sort((a, b) => b.result.roi - a.result.roi);
+
+  // Main table
   let html = '';
-  for (const [name, note, data, isB] of rows) {
-    const bg = isB ? ' class="highlight"' : '';
-    html += '<tr' + bg + '>';
-    html += '<td style="text-align:left">' + name + '<br><span style="font-size:11px;color:#6b7280">' + note + '</span></td>';
-    html += '<td>' + fmtA(data.stakedVal / totalTRXAfter) + '</td>';
-    html += '<td>' + fmtA(data.stakedVal) + '</td>';
-    html += '<td>' + fmtD(data.shortPnl) + '</td>';
-    html += '<td>' + fmtA(data.remainingCash) + '</td>';
-    html += '<td>' + fmtA(data.totalAsset) + '</td>';
-    html += '<td>' + fmtD(data.netProfit) + '</td>';
-    html += '<td>' + fmtR(data.roi) + '</td>';
+  results.forEach((r, i) => {
+    const res = r.result;
+    const chg = ((res.finalPrice / p0) - 1) * 100;
+    const ops = res.steps.length;
+    const rowClass = i === 0 ? ' class="highlight"' : '';
+    html += '<tr' + rowClass + '>';
+    html += '<td class="l">#' + (i + 1) + '</td>';
+    html += '<td class="l"><strong>' + labels[r.key] + '</strong></td>';
+    html += '<td>' + ops + '次</td>';
+    html += '<td>$' + res.finalPrice.toFixed(3) + '</td>';
+    html += '<td class="green">+' + chg.toFixed(1) + '%</td>';
+    html += '<td>$' + res.totalAsset.toFixed(2) + '</td>';
+    html += '<td class="green">+$' + res.profit.toFixed(2) + '</td>';
+    html += '<td class="green">' + res.roi.toFixed(2) + '%</td>';
+    html += '<td>' + res.steps.map(s => s.lev).join('→') + '</td>';
+    html += '</tr>';
+  });
+  document.getElementById('mainTable').innerHTML = html;
+
+  // Strategy selector
+  const sel = document.getElementById('strategySelect');
+  sel.innerHTML = '';
+  results.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.key;
+    opt.textContent = labels[r.key] + ' (' + r.result.roi.toFixed(2) + '%)';
+    sel.appendChild(opt);
+  });
+
+  // Detail of selected
+  updateDetail(results, labels, p0);
+}
+
+function updateDetail(results, labels, p0) {
+  const sel = document.getElementById('strategySelect').value;
+  const r = results.find(x => x.key === sel);
+  if (!r) return;
+  
+  let html = '';
+  const steps = r.result.steps;
+  if (steps.length === 0) {
+    html = '<tr><td colspan="9" style="text-align:center;color:#6b7280">无法开仓（保证金不足）</td></tr>';
+  }
+  for (const s of steps) {
+    const chg = ((s.liq / p0) - 1) * 100;
+    html += '<tr>';
+    html += '<td>' + s.round + '</td>';
+    html += '<td>' + s.lev + '</td>';
+    html += '<td>$' + s.entry.toFixed(3) + '</td>';
+    html += '<td>$' + s.liq.toFixed(3) + ' (+' + chg.toFixed(1) + '%)</td>';
+    html += '<td class="red">-$' + s.margin.toFixed(2) + '</td>';
+    html += '<td>$' + s.cashAfter.toFixed(2) + '</td>';
+    html += '<td>$' + s.stakedVal.toFixed(2) + '</td>';
+    html += '<td>$' + s.total.toFixed(2) + '</td>';
+    html += '<td class="green">+$' + s.profit.toFixed(2) + '</td>';
     html += '</tr>';
   }
-  document.getElementById('resultBody').innerHTML = html;
-
-  // Curve table
-  document.getElementById('exitPriceDisplay').textContent = '$' + exitPrice.toFixed(3);
-
-  let curveHtml = '';
-  const changes = [-100, -75, -50, -25, 0, 25, 40, 50, 60, 75, 100];
-  for (const pct of changes) {
-    const p = shortPrice * (1 + pct / 100);
-    if (p < 0) continue;
-
-    // Pure 2x (no emergency, liquidated = only staked TRX)
-    let roiPure;
-    if (p < liquidationPrice2x) {
-      roiPure = calc2x(p).roi;
-    } else {
-      const val = totalTRXAfter * p;
-      roiPure = ((val - totalCapital) / totalCapital) * 100;
-    }
-
-    // 2x + 10x emergency
-    let roiEmerg;
-    if (p < liquidationPrice2x) {
-      roiEmerg = calc2x(p).roi;
-    } else {
-      const em = calcEmergency(p, liquidationPrice2x);
-      roiEmerg = em.roi;
-    }
-
-    curveHtml += '<tr>';
-    curveHtml += '<td style="text-align:left">' + (pct > 0 ? '+' : '') + pct + '%</td>';
-    curveHtml += '<td>' + p.toFixed(3) + '</td>';
-    curveHtml += '<td>' + fmtR(roiPure) + '</td>';
-    curveHtml += '<td>' + fmtR(roiEmerg) + '</td>';
-    curveHtml += '</tr>';
-  }
-  document.getElementById('curveBody').innerHTML = curveHtml;
+  // Final state
+  const f = r.result;
+  html += '<tr class="highlight"><td colspan="9" style="text-align:center;color:#fb923c">❌ 现金耗尽，无法继续开仓</td></tr>';
+  html += '<tr class="highlight"><td colspan="2">终局</td><td colspan="2">$' + f.finalPrice.toFixed(3) + '（+' + (((f.finalPrice/p0)-1)*100).toFixed(1) + '%）</td>';
+  html += '<td colspan="2">现金剩 $' + f.cash.toFixed(2) + '</td><td colspan="2">净赚 +$' + f.profit.toFixed(2) + ' → ' + f.roi.toFixed(2) + '%</td><td></td></tr>';
+  document.getElementById('detailTable').innerHTML = html;
 }
 
 document.getElementById('buyPrice').addEventListener('input', calc);
 document.getElementById('shortPrice').addEventListener('input', calc);
 document.getElementById('stakeAmount').addEventListener('input', calc);
 document.getElementById('apy').addEventListener('input', calc);
-document.getElementById('backupCash').addEventListener('input', calc);
-document.getElementById('exitPriceSlider').addEventListener('input', calc);
+document.getElementById('strategySelect').addEventListener('change', function() {
+  updateDetail(
+    [...document.querySelectorAll('#mainTable tr')].map(() => {}),
+    {},
+    0
+  );
+  // Re-fetch results by recalculating
+  calc();
+});
 
 calc();
 </script>
