@@ -149,7 +149,11 @@ function calc() {
   };
 
   const results = combos.map(c => ({ key: c.join(','), levs: c, result: runStrategy(c) }));
-  results.sort((a, b) => b.result.roi - a.result.roi);
+  results.sort((a, b) => {
+  const pa = a.result.steps[0]?.profit || 0;
+  const pb = b.result.steps[0]?.profit || 0;
+  return pb - pa;
+});
 
   let html = '';
   results.forEach((r, i) => {
