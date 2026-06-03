@@ -83,6 +83,7 @@ td.l{text-align:left;font-family:inherit}
         <th>总资产</th>
         <th>净赚</th>
         <th>ROI</th>
+        <th>备用</th>
         <th>操作</th>
       </tr>
     </thead>
@@ -166,7 +167,14 @@ function calc() {
     const chg = ((res.finalPrice / p0) - 1) * 100;
     const ops = res.steps.length;
     const rc = i === 0 ? ' class="highlight"' : '';
-    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '%</td><td>' + res.steps.map(s => s.shortAmt ? s.shortAmt.toFixed(0) + '@' + s.lev : s.lev).join('→') + '</td></tr>';
+    // 检查第二轮现金是否够
+    let backupOk = true;
+    if (r.levs.length > 1 && res.steps.length >= 2) {
+      backupOk = res.steps[0].cashAfter >= res.steps[1].margin;
+    }
+    const bIcon = backupOk ? '🟢' : '🔴';
+    const bTitle = backupOk ? '充足' : '不够';
+    html += '<tr' + rc + '><td class="l">#' + (i+1) + '</td><td class="l"><strong>' + labels[r.key] + '</strong></td><td>' + ops + '次</td><td>$' + res.finalPrice.toFixed(3) + '</td><td class="green">+' + chg.toFixed(1) + '%</td><td>$' + res.totalAsset.toFixed(2) + '</td><td class="green">+$' + res.profit.toFixed(2) + '</td><td class="green">' + res.roi.toFixed(2) + '%</td><td>' + bIcon + '</td><td>' + res.steps.map(s => (s.shortAmt ? s.shortAmt.toFixed(0) : '') + s.lev).join('→') + '</td></tr>';
   });
   document.getElementById('mainTable').innerHTML = html;
 
