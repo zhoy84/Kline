@@ -67,6 +67,28 @@ td.l{text-align:left;font-family:inherit}
   </div>
 </div>
 
+<div class="card">
+  <h2 style="font-size:15px;font-weight:600;color:#e5e7eb;margin-bottom:8px">📋 全部组合排名</h2>
+  <div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th class="l">排名</th>
+        <th class="l">策略</th>
+        <th>轮数</th>
+        <th>止于价格</th>
+        <th>涨幅</th>
+        <th>总资产</th>
+        <th>净赚</th>
+        <th>ROI</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="mainTable"></tbody>
+  </table>
+  </div>
+</div>
+
 <script>
 function calc() {
   const n = parseFloat(document.getElementById('stakeAmount').value) || 1649;
