@@ -163,14 +163,7 @@ export default function Home() {
                 质押策略器
               </button>
             </div>
-            {tab === "kline" && (
-              <DrawdownConfig
-                value={drawdownThreshold}
-                onChange={setDrawdownThreshold}
-                disabled={recomputing}
-                onBlur={handleRecompute}
-              />
-            )}
+            {tab === "kline" && <span className="text-xs text-gray-600">K-line Lab</span>}
           </div>
         </div>
       </header>
@@ -203,11 +196,19 @@ export default function Home() {
                       导出
                     </button>
                   </div>
-                  <CoinSelector
-                    coins={coins}
-                    selected={selectedSymbol}
-                    onSelect={setSelectedSymbol}
-                  />
+                  <div className="flex items-center gap-2">
+                    <CoinSelector
+                      coins={coins}
+                      selected={selectedSymbol}
+                      onSelect={setSelectedSymbol}
+                    />
+                    <DrawdownConfig
+                      value={drawdownThreshold}
+                      onChange={setDrawdownThreshold}
+                      disabled={recomputing}
+                      onBlur={handleRecompute}
+                    />
+                  </div>
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
                   <EventsTable events={events} coins={coins} selectedSymbol={selectedSymbol} />
