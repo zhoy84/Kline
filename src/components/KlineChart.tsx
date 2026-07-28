@@ -86,13 +86,21 @@ export default function KlineChart({ data }: Props) {
     candlestickSeries.setData(chartData);
     chart.timeScale().fitContent();
 
-    // Zoom to last ~400 candles for thicker candle rendering
-    if (chartData.length > 400) {
+    // Zoom to show recent candles with better visibility
+    // Show last 70 candles (~70 days), with the latest candle at the right edge
+    const displayCount = 70;
+    if (chartData.length > displayCount) {
       const lastIdx = chartData.length - 1;
+      // Display last displayCount candles, including the latest one
+      const viewStart = lastIdx - displayCount + 1;
+      const viewEnd = lastIdx;  // Include latest candle
       chart.timeScale().setVisibleRange({
-        from: chartData[lastIdx - 399].time as any,
-        to: chartData[lastIdx].time as any,
+        from: chartData[viewStart].time as any,
+        to: chartData[viewEnd].time as any,
       });
+    } else if (chartData.length > 0) {
+      // For less data, show everything
+      chart.timeScale().fitContent();
     }
 
     // Resize observer
@@ -115,7 +123,7 @@ export default function KlineChart({ data }: Props) {
     <div
       ref={chartContainerRef}
       className="w-full rounded-lg overflow-hidden"
-      style={{ minHeight: "400px", height: "100%" }}
+      style={{ minHeight: "300px", height: "100%" }}
     />
   );
 }

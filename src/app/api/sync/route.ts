@@ -2,53 +2,104 @@ import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { getCoins, getLatestOpenTime, insertKline } from "@/lib/db";
 
+// Configuration
 const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS || "5");
 const DRAWDOWN_THRESHOLD = parseFloat(process.env.DRAWDOWN_THRESHOLD_PCT || "20");
+const FETCH_TIMEOUT_MS = 30000;
+const MAX_RETRIES = 3;
 
 // Simple in-memory rate limiter (per-instance, good enough for cron-triggered sync)
 let lastSyncAt = 0;
+
+/** Retry wrapper for fetch with exponential backoff */
+async function fetchWithRetry(url: string): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      
+      const resp = await fetch(url, { signal: controller.signal });
+      
+      if (!resp.ok) {
+        // Try to read response body for more details
+        let errorMsg = `HTTP ${resp.status}: ${resp.statusText}`;
+        try {
+          const bodyText = await resp.text();
+          if (bodyText && bodyText.trim()) {
+            errorMsg += `\nResponse body: ${bodyText}`;
+          }
+        } catch (e) {
+          // Could not read body
+        }
+        console.error(`Full error: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      return resp;
+    } catch (err) {
+      lastError = err as Error;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`Fetch attempt ${attempt}/${MAX_RETRIES} failed: ${errorMessage}`);
+      
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError || new Error("Fetch failed after max retries");
+}
 
 function toDateStr(ms: number): string {
   return new Date(Number(ms)).toISOString().split("T")[0];
 }
 
-// Coin => CryptoCompare fsym mapping
-const SYMBOL_MAP: Record<string, string> = {
-  BTCUSDT: "BTC",
-  ETHUSDT: "ETH",
-  DOGEUSDT: "DOGE",
-};
-
-async function fetchKlines(symbol: string, _startTime: number): Promise<Array<[number, string, string, string, string, string]>> {
-  const fsym = SYMBOL_MAP[symbol];
-  if (!fsym) {
+async function fetchKlines(symbol: string): Promise<Array<[number, string, string, string, string, string]>> {
+  // Coin symbol => CoinGecko API ID
+  const coinIdMap = {
+    BTCUSDT: "bitcoin",
+    ETHUSDT: "ethereum",
+    DOGEUSDT: "dogecoin",
+  } as Record<string, string>;
+  const coinId = coinIdMap[symbol];
+  if (!coinId) {
     console.error(`Unsupported symbol: ${symbol}`);
     return [];
   }
-  const url = `https://min-api.cryptocompare.com/data/v2/histoday?fsym=${fsym}&tsym=USDT&limit=2000`;
+  
+  // Use CoinGecko API for daily OHLC data (no API key required for basic usage)
+  // https://www.coingecko.com/en/api
+  // Note: interval must be "day" and we don't use localization=false anymore
+  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90&interval=day`;
+  console.log(`Fetching klines for ${symbol} from CoinGecko: ${url}`);
+  
   let resp: Response;
   try {
-    resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    resp = await fetchWithRetry(url);
   } catch (e) {
-    console.error(`CryptoCompare ${symbol}: network error`, e);
+    console.error(`Binance ${symbol}: final fetch error after ${MAX_RETRIES} attempts`, e);
     return [];
   }
-  if (!resp.ok) {
-    console.error(`CryptoCompare ${symbol}: ${resp.status} ${resp.statusText}`);
+  
+if (!resp.ok) {
+    console.error(`CoinGecko ${symbol}: ${resp.status} ${resp.statusText}`);
     return [];
   }
-  const json = await resp.json();
-  if (json.Response !== "Success") {
-    console.error(`CryptoCompare ${symbol}: API error`, json.Message);
-    return [];
-  }
-  return json.Data.Data.map((k: { time: number; open: number; high: number; low: number; close: number; volumefrom: number }) => [
-    k.time,           // seconds (matches existing format)
-    String(k.open),
-    String(k.high),
-    String(k.low),
-    String(k.close),
-    String(k.volumefrom),
+  
+  const data = await resp.json();
+  
+  // CoinGecko returns: array of arrays [timestamp_ms, open, high, low, close, volume]
+  // timestamp is already in milliseconds
+  return data.map((k: Array<number>) => [
+    k[0],                              // open_time in milliseconds (from CoinGecko)
+    String(k[1]),                      // open
+    String(k[2]),                      // high
+    String(k[3]),                      // low
+    String(k[4]),                      // close
+    String(k[5]),                      // volume
   ]);
 }
 
@@ -202,37 +253,58 @@ async function runSync(): Promise<NextResponse> {
 
   try {
     const coins = await getCoins();
+    let totalInserted = 0;
 
     for (const coin of coins) {
       const symbol = coin.symbol;
       const latest = await getLatestOpenTime(coin.id);
 
-      // Fetch klines from CryptoCompare
-      const klines = await fetchKlines(symbol, 0);
+      // Fetch klines from CoinGecko
+      const klines = await fetchKlines(symbol);
       let inserted = 0;
 
-      // Only process recent data (5 days before latest) to avoid 1000s of upserts
-      const cutoff = (latest ?? 0) - 5 * 86400000;
-      for (const k of klines) {
-        const openTime = k[0] as number * 1000;
-        if (openTime < cutoff) continue; // skip old data, already in DB
+      console.log(`${symbol}: latest DB time = ${latest ? new Date(latest).toISOString().split("T")[0] : 'empty'}`);
 
-        if (openTime <= (latest ?? 0)) {
-          await insertKline(coin.id, {
-            open_time: openTime,
-            open: parseFloat(k[1]),
-            high: parseFloat(k[2]),
-            low: parseFloat(k[3]),
-            close: parseFloat(k[4]),
-            volume: parseFloat(k[5]),
-            close_time: 0,
-            quote_volume: 0,
-            trades: 0,
-          });
-          inserted++;
+      if (klines.length === 0) {
+        console.log(`${symbol}: No klines fetched, skipping this coin`);
+        continue;
+      }
+
+      // Determine sync starting point
+      const latestMs = latest ?? 0;
+      
+      if (latestMs === 0) {
+        // First sync: process all klines
+        console.log(`${symbol}: First-time sync, processing all ${klines.length} klines`);
+      } else {
+        // Incremental sync: process klines newer than latest
+        console.log(`${symbol}: Processing klines after ${new Date(latestMs).toISOString().split("T")[0]}`);
+      }
+
+      for (const k of klines) {
+        const openTime = k[0] as number;  // now in milliseconds directly from CoinGecko
+        
+        // Skip data that's already in the database
+        if (openTime <= latestMs) {
+          // Only upsert if needed (for data that might have been corrected)
+          if (openTime === latestMs) {
+            await insertKline(coin.id, {
+              open_time: openTime,
+              open: parseFloat(k[1]),
+              high: parseFloat(k[2]),
+              low: parseFloat(k[3]),
+              close: parseFloat(k[4]),
+              volume: parseFloat(k[5]),
+              close_time: 0,
+              quote_volume: 0,
+              trades: 0,
+            });
+            inserted++;
+          }
           continue;
         }
 
+        // Insert/upsert new kline
         await insertKline(coin.id, {
           open_time: openTime,
           open: parseFloat(k[1]),
@@ -247,20 +319,29 @@ async function runSync(): Promise<NextResponse> {
         inserted++;
       }
 
+      totalInserted += inserted;
+
       if (inserted > 0) {
         const otherCoins = coins.filter(c => c.id !== coin.id);
-        const recomputeFrom = (latest ?? 0) > 0
-          ? (latest as number) - 30 * 86400000
-          : 0;
-        await recomputeEvents(coin.id, otherCoins, recomputeFrom > 0 ? recomputeFrom : 0);
+        // Recompute events from 30 days before the new latest to ensure event consistency
+        const newLatest = klines[klines.length - 1][0]; // most recent from API (already in ms)
+        const recomputeFrom = newLatest - 30 * 86400000;
+        await recomputeEvents(coin.id, otherCoins, recomputeFrom);
+        console.log(`${symbol}: Recomputed events from ${new Date(recomputeFrom).toISOString().split("T")[0]}`);
       }
-      console.log(`${symbol}: ${inserted} klines processed (latest=${new Date(Number(latest ?? 0)).toISOString().split("T")[0]})`);
+      
+      console.log(`${symbol}: ${inserted} klines processed successfully`);
     }
 
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json({ 
+      status: "ok", 
+      totalInserted, 
+      message: `Sync completed with ${totalInserted} total klines inserted/updated` 
+    });
   } catch (err) {
     console.error("Sync error:", err);
-    return NextResponse.json({ error: "Sync failed" }, { status: 500 });
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "Sync failed: " + errorMessage }, { status: 500 });
   }
 }
 

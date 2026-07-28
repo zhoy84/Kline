@@ -178,7 +178,7 @@ export default function Home() {
           ) : (
             <div className="flex flex-col lg:flex-row gap-4">
               {/* Chart */}
-              <div className="w-full lg:w-[60%] min-h-[400px] lg:min-h-[600px] bg-[#1a1a2e] rounded-lg border border-gray-800">
+              <div className="w-full lg:w-[60%] min-h-[300px] lg:min-h-[500px] bg-[#1a1a2e] rounded-lg border border-gray-800">
                 <KlineChart data={klines} />
               </div>
               {/* Events Table */}
