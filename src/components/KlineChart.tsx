@@ -33,7 +33,7 @@ export default function KlineChart({ data }: Props) {
       },
       localization: {
         timeFormatter: (time: Time) => {
-          const d = new Date((time as number) * 1000);
+          const d = new Date(time as number);  // time is already in milliseconds
           const y = d.getUTCFullYear();
           const m = String(d.getUTCMonth() + 1).padStart(2, "0");
           const day = String(d.getUTCDate()).padStart(2, "0");
@@ -53,7 +53,7 @@ export default function KlineChart({ data }: Props) {
         timeVisible: false,
         borderColor: "#2a2a4a",
         tickMarkFormatter: (time: Time) => {
-          const d = new Date((time as number) * 1000);
+          const d = new Date(time as number);  // time is already in milliseconds
           const y = d.getUTCFullYear();
           const m = String(d.getUTCMonth() + 1).padStart(2, "0");
           return `${y}-${m}`;

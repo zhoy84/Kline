@@ -91,10 +91,10 @@ if (!resp.ok) {
   
   const data = await resp.json();
   
-  // CoinGecko returns: array of arrays [timestamp_seconds, open, high, low, close, volume]
-// Note: timestamp is in Unix seconds, need to convert to milliseconds by multiplying by 1000
+  // CoinGecko returns: array of arrays [timestamp_ms, open, high, low, close, volume]
+// Note: timestamp is ALREADY in milliseconds (13 digits), NO conversion needed!
 return data.map((k: Array<number>) => [
-  k[0] * 1000,                       // open_time in milliseconds (seconds * 1000 from CoinGecko)
+  k[0],                              // open_time in milliseconds (CoinGecko returns ms directly)
     String(k[1]),                      // open
     String(k[2]),                      // high
     String(k[3]),                      // low

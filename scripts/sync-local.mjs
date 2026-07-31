@@ -2,9 +2,8 @@
  * Local sync script — run from any machine that can access CoinGecko.
  * Fetches latest klines from CoinGecko and writes to Neon DB.
  *
- * Usage (pick one):
- *   1. node scripts/sync-local.mjs                     # uses .env.local
- *   2. set POSTGRES_URL=... && node scripts/sync-local.mjs
+ * Usage:
+ *   node scripts/sync-local.mjs
  *
  * Prerequisites: Node.js 18+
  */
@@ -68,26 +67,35 @@ async function fetchWithRetry(url) {
 }
 
 async function fetchKlines(symbol) {
-  // Use Binance public API for daily candlestick data (no API key required)
-  // https://binance-docs/api-docs/#kdata-candlestick-trading-information
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1D&limit=2000`;
-  console.log(`Fetching klines for ${symbol} from Binance: ${url}`);
+  const coinId = COIN_ID_MAP[symbol];
+  if (!coinId) throw new Error(`Unsupported symbol: ${symbol}`);
+  
+  // CoinGecko OHLC API returns flat array: [[timestamp_ms, open, high, low, close, volume], ...]
+  // Timestamps are ALREADY in milliseconds (13 digits) - NO * 1000 conversion needed!
+  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90`;
+  console.log(`Fetching klines for ${symbol} from CoinGecko: ${url}`);
   
   let resp;
   try {
     resp = await fetchWithRetry(url);
   } catch (e) {
-    throw new Error(`Binance ${symbol}: fetch failed after ${MAX_RETRIES} attempts: ${e.message}`);
+    throw new Error(`CoinGecko ${symbol}: fetch failed after ${MAX_RETRIES} attempts: ${e.message}`);
   }
   
-  if (!resp.ok) throw new Error(`Binance ${symbol}: ${resp.status} ${resp.statusText}`);
+  if (!resp.ok) throw new Error(`CoinGecko ${symbol}: ${resp.status} ${resp.statusText}`);
   
   const data = await resp.json();
   
-// Binance returns: array of arrays [open_time_ms, open, high, low, close, volume, ...]
-// open_time is already in milliseconds, no conversion needed
+  // CoinGecko returns a FLAT array directly (not nested like Yahoo Finance)
+  if (!Array.isArray(data)) {
+    throw new Error(`CoinGecko ${symbol}: unexpected response format`);
+  }
+  
+  console.log(`CoinGecko ${symbol}: received ${data.length} candles`);
+  
+  // Map directly - k[0] is already milliseconds
   return data.map((k) => ({
-    open_time: k[0],            // open_time in ms from Binance
+    open_time: k[0],            // open_time in ms from CoinGecko (already correct)
     open: parseFloat(k[1]),
     high: parseFloat(k[2]),
     low: parseFloat(k[3]),
@@ -95,45 +103,17 @@ async function fetchKlines(symbol) {
     volume: parseFloat(k[5]),
   }));
 }
-  const lines = csvText.trim().split("\n");
-  
-  if (lines.length < 2) {
-    throw new Error(`Yahoo Finance ${symbol}: no data rows`);
-  }
-  
-  // Skip header line, parse data rows
-  const klines = lines.slice(1).map(line => {
-    const cols = line.split(",");
-    const dateStr = cols[0];  // "YYYY-MM-DD"
-    const open = parseFloat(cols[1]);
-    const high = parseFloat(cols[2]);
-    const low = parseFloat(cols[3]);
-    const close = parseFloat(cols[4]);
-    const volume = parseFloat(cols[5]);
-    
-    // Convert date string to UTC midnight timestamp (milliseconds)
-    const date = new Date(dateStr + "T00:00:00Z");  // Parse as UTC midnight
-    const timestampMs = date.getTime();
-    
-    return {
-      open_time: timestampMs,
-      open: open,
-      high: high,
-      low: low,
-      close: close,
-      volume: volume,
-    };
-  });
-  
-  return klines;
-}
-}
 
 async function main() {
   const { rows: coins } = await sql`SELECT id, symbol FROM coins WHERE active = true ORDER BY id`;
   console.log(`Coins: ${coins.map((c) => c.symbol).join(", ")}`);
 
   let total = 0;
+
+  // Clean up abnormal timestamps before sync
+  await sql`DELETE FROM notable_events WHERE coin_id IN (SELECT DISTINCT coin_id FROM klines WHERE open_time > 2000000000000)`;
+  await sql`DELETE FROM klines WHERE open_time > 2000000000000`;
+  console.log("Cleaned up abnormal timestamp records\n");
 
   for (const coin of coins) {
     const symbol = coin.symbol;
@@ -145,7 +125,7 @@ async function main() {
       ORDER BY open_time DESC LIMIT 1
     `;
     const latest = rows.length > 0 ? Number(rows[0].open_time) : 0;
-    console.log(`\n${symbol}: latest DB time = ${latest ? new Date(latest).toISOString().split("T")[0] : "none"}`);
+    console.log(`${symbol}: latest DB time = ${latest ? new Date(latest).toISOString().split("T")[0] : "none"}`);
 
     // Fetch klines from CoinGecko with retry
     const klines = await fetchKlines(symbol);
@@ -202,7 +182,6 @@ async function main() {
   }
 
   console.log(`\nDone. Total: ${total} klines synced.`);
-  console.log('Run "重新生成" on the web page to recompute events.');
 }
 
 main().catch((err) => {
