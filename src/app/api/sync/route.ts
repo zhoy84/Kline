@@ -58,23 +58,23 @@ function toDateStr(ms: number): string {
 }
 
 async function fetchKlines(symbol: string): Promise<Array<[number, string, string, string, string, string]>> {
-  // Coin symbol => CoinGecko API ID
-  const coinIdMap = {
-    BTCUSDT: "bitcoin",
-    ETHUSDT: "ethereum",
-    DOGEUSDT: "dogecoin",
-  } as Record<string, string>;
-  const coinId = coinIdMap[symbol];
-  if (!coinId) {
-    console.error(`Unsupported symbol: ${symbol}`);
-    return [];
-  }
-  
-  // Use CoinGecko API for daily OHLC data (no API key required)
-// https://www.coingecko.com/api/documentation#available-endpoints
-// Default interval is DAY, no need to specify
-const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90`;
-  console.log(`Fetching klines for ${symbol} from CoinGecko: ${url}`);
+  // Coin symbol => Coinbase Exchange product ID
+const coinProductMap: Record<string, string> = {
+  BTCUSDT: "BTC-USD",
+  ETHUSDT: "ETH-USD",
+  DOGEUSDT: "DOGE-USD",
+};
+const product = coinProductMap[symbol as keyof typeof coinProductMap] as string;
+if (!product) {
+  console.error(`Unsupported symbol: ${symbol}`);
+  return [];
+}
+
+// Coinbase Exchange public API — returns continuous daily candles (no sampling)
+// Format: [timestamp_sec, open, high, low, close, volume]
+// https://docs.coinbase.com/exchange/reference/exch-restmarketsapi-getcandles
+const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=86400&limit=60`;
+  console.log(`Fetching klines for ${symbol} from Coinbase: ${url}`);
   
   let resp: Response;
   try {
@@ -85,21 +85,21 @@ const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=u
   }
   
 if (!resp.ok) {
-    console.error(`CoinGecko ${symbol}: ${resp.status} ${resp.statusText}`);
+    console.error(`Coinbase ${symbol}: ${resp.status} ${resp.statusText}`);
     return [];
   }
   
-  const data = await resp.json();
+const data = await resp.json();
   
-  // CoinGecko returns: array of arrays [timestamp_ms, open, high, low, close, volume]
-// Note: timestamp is ALREADY in milliseconds (13 digits), NO conversion needed!
+// Coinbase returns: array of arrays [timestamp_sec, open, high, low, close, volume]
+// timestamp is in Unix SECONDS, need to convert to milliseconds by multiplying by 1000
 return data.map((k: Array<number>) => [
-  k[0],                              // open_time in milliseconds (CoinGecko returns ms directly)
-    String(k[1]),                      // open
-    String(k[2]),                      // high
-    String(k[3]),                      // low
-    String(k[4]),                      // close
-    String(k[5]),                      // volume
+  k[0] * 1000,                       // open_time in milliseconds (seconds * 1000 from Coinbase)
+  String(k[1]),                      // open
+  String(k[2]),                      // high
+  String(k[3]),                      // low
+  String(k[4]),                      // close
+  String(k[5]),                      // volume
   ]);
 }
 
