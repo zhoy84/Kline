@@ -70,17 +70,17 @@ async function fetchKlines(symbol: string): Promise<Array<[number, string, strin
     return [];
   }
   
-  // Use CoinGecko API for daily OHLC data (no API key required for basic usage)
-  // https://www.coingecko.com/en/api
-  // Note: interval must be "day" and we don't use localization=false anymore
-  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90&interval=day`;
+  // Use CoinGecko API for daily OHLC data (no API key required)
+// https://www.coingecko.com/api/documentation#available-endpoints
+// Default interval is DAY, no need to specify
+const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90`;
   console.log(`Fetching klines for ${symbol} from CoinGecko: ${url}`);
   
   let resp: Response;
   try {
     resp = await fetchWithRetry(url);
   } catch (e) {
-    console.error(`Binance ${symbol}: final fetch error after ${MAX_RETRIES} attempts`, e);
+    console.error(`CoinGecko ${symbol}: final fetch error after ${MAX_RETRIES} attempts`, e);
     return [];
   }
   
@@ -91,10 +91,10 @@ if (!resp.ok) {
   
   const data = await resp.json();
   
-  // CoinGecko returns: array of arrays [timestamp_ms, open, high, low, close, volume]
-  // timestamp is already in milliseconds
-  return data.map((k: Array<number>) => [
-    k[0],                              // open_time in milliseconds (from CoinGecko)
+  // CoinGecko returns: array of arrays [timestamp_seconds, open, high, low, close, volume]
+// Note: timestamp is in Unix seconds, need to convert to milliseconds by multiplying by 1000
+return data.map((k: Array<number>) => [
+  k[0] * 1000,                       // open_time in milliseconds (seconds * 1000 from CoinGecko)
     String(k[1]),                      // open
     String(k[2]),                      // high
     String(k[3]),                      // low
@@ -283,6 +283,11 @@ async function runSync(): Promise<NextResponse> {
 
       for (const k of klines) {
         const openTime = k[0] as number;  // now in milliseconds directly from CoinGecko
+        
+        // DEBUG: Log a few sample timestamps to understand the range
+        if (inserted === 0 && k[0] > latestMs) {
+          console.log(`  Sample new kline time: ${new Date(openTime).toISOString().split('T')[0]}, raw: ${k[0]}`);
+        }
         
         // Skip data that's already in the database
         if (openTime <= latestMs) {
