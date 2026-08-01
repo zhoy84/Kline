@@ -67,8 +67,9 @@ export default function Home() {
       .catch((err) => console.error("Coins fetch error:", err));
   }, []);
 
-  // Fetch klines from DB (events from DB or preview override)
+  // Fetch klines from DB
   const fetchKlines = useCallback(async (symbol: string) => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/klines?symbol=${symbol}&limit=2000`);
       if (!res.ok) throw new Error(`Klines API returned ${res.status}`);
@@ -76,11 +77,14 @@ export default function Home() {
       setKlines(data);
     } catch (err) {
       console.error("Fetch klines failed:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   // Fetch events from DB (the source of truth)
   const fetchEvents = useCallback(async (symbol: string) => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/events?symbol=${symbol}`);
       if (!res.ok) throw new Error(`Events API returned ${res.status}`);
@@ -88,6 +92,8 @@ export default function Home() {
       setEvents(data as NotableEvent[]);
     } catch (err) {
       console.error("Fetch events failed:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
