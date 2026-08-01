@@ -67,13 +67,18 @@ async function fetchWithRetry(url) {
 }
 
 async function fetchKlines(symbol) {
-  const coinId = COIN_ID_MAP[symbol];
-  if (!coinId) throw new Error(`Unsupported symbol: ${symbol}`);
+  const coinProductMap = {
+    BTCUSDT: "BTC-USD",
+    ETHUSDT: "ETH-USD",
+    DOGEUSDT: "DOGE-USD",
+  };
+  const product = coinProductMap[symbol];
+  if (!product) throw new Error(`Unsupported symbol: ${symbol}`);
   
-  // CoinGecko OHLC API returns flat array: [[timestamp_ms, open, high, low, close, volume], ...]
-  // Timestamps are ALREADY in milliseconds (13 digits) - NO * 1000 conversion needed!
-  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90`;
-  console.log(`Fetching klines for ${symbol} from CoinGecko: ${url}`);
+  // Coinbase Exchange API returns flat array: [[timestamp_sec, low, high, open, close, volume], ...]
+  // timestamp is in Unix SECONDS, need to convert to milliseconds by multiplying by 1000
+  const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=86400&limit=60`;
+  console.log(`Fetching klines for ${symbol} from Coinbase: ${url}`);
   
   let resp;
   try {
@@ -82,25 +87,26 @@ async function fetchKlines(symbol) {
     throw new Error(`CoinGecko ${symbol}: fetch failed after ${MAX_RETRIES} attempts: ${e.message}`);
   }
   
-  if (!resp.ok) throw new Error(`CoinGecko ${symbol}: ${resp.status} ${resp.statusText}`);
+  if (!resp.ok) throw new Error(`Coinbase ${symbol}: ${resp.status} ${resp.statusText}`);
   
   const data = await resp.json();
   
-  // CoinGecko returns a FLAT array directly (not nested like Yahoo Finance)
+  // Coinbase returns a FLAT array directly
   if (!Array.isArray(data)) {
-    throw new Error(`CoinGecko ${symbol}: unexpected response format`);
+    throw new Error(`Coinbase ${symbol}: unexpected response format`);
   }
   
-  console.log(`CoinGecko ${symbol}: received ${data.length} candles`);
+  console.log(`Coinbase ${symbol}: received ${data.length} candles`);
   
-  // Map directly - k[0] is already milliseconds
+  // Map - k[0] is timestamp in seconds, multiply by 1000 to convert to milliseconds
+  // Coinbase candle format: [time, low, high, open, close, volume]
   return data.map((k) => ({
-    open_time: k[0],            // open_time in ms from CoinGecko (already correct)
-    open: parseFloat(k[1]),
-    high: parseFloat(k[2]),
-    low: parseFloat(k[3]),
-    close: parseFloat(k[4]),
-    volume: parseFloat(k[5]),
+    open_time: k[0] * 1000,      // open_time in ms (seconds * 1000 from Coinbase)
+    open: parseFloat(k[3]),      // open   (Coinbase index 3)
+    high: parseFloat(k[2]),      // high   (Coinbase index 2)
+    low: parseFloat(k[1]),       // low    (Coinbase index 1)
+    close: parseFloat(k[4]),     // close  (Coinbase index 4)
+    volume: parseFloat(k[5]),    // volume (Coinbase index 5)
   }));
 }
 

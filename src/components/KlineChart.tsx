@@ -79,10 +79,10 @@ export default function KlineChart({ data }: Props) {
 
     const chartData = data.map((d) => ({
       time: Math.floor(d.open_time / 1000) as any,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
+      open: Number(d.open),      // 转为数字
+      high: Number(d.high),
+      low: Number(d.low),
+      close: Number(d.close),
     }));
 
     candlestickSeries.setData(chartData);

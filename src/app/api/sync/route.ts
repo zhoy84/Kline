@@ -71,7 +71,7 @@ if (!product) {
 }
 
 // Coinbase Exchange public API — returns continuous daily candles (no sampling)
-// Format: [timestamp_sec, open, high, low, close, volume]
+// Format: [timestamp_sec, low, high, open, close, volume]
 // https://docs.coinbase.com/exchange/reference/exch-restmarketsapi-getcandles
 const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=86400&limit=60`;
   console.log(`Fetching klines for ${symbol} from Coinbase: ${url}`);
@@ -91,15 +91,15 @@ if (!resp.ok) {
   
 const data = await resp.json();
   
-// Coinbase returns: array of arrays [timestamp_sec, open, high, low, close, volume]
+// Coinbase returns: array of arrays [timestamp_sec, low, high, open, close, volume]
 // timestamp is in Unix SECONDS, need to convert to milliseconds by multiplying by 1000
 return data.map((k: Array<number>) => [
   k[0] * 1000,                       // open_time in milliseconds (seconds * 1000 from Coinbase)
-  String(k[1]),                      // open
-  String(k[2]),                      // high
-  String(k[3]),                      // low
-  String(k[4]),                      // close
-  String(k[5]),                      // volume
+  String(k[3]),                      // open   (Coinbase index 3)
+  String(k[2]),                      // high   (Coinbase index 2)
+  String(k[1]),                      // low    (Coinbase index 1)
+  String(k[4]),                      // close  (Coinbase index 4)
+  String(k[5]),                      // volume (Coinbase index 5)
   ]);
 }
 

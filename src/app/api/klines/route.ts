@@ -8,7 +8,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const klines = await getKlines(symbol, limit);
-    return NextResponse.json(klines);
+    // Convert all numeric fields to numbers to ensure proper type handling
+    const cleanedKlines = klines.map(k => ({
+      open_time: Number(k.open_time),
+      open: Number(k.open),
+      high: Number(k.high),
+      low: Number(k.low),
+      close: Number(k.close),
+      volume: Number(k.volume),
+    }));
+    return NextResponse.json(cleanedKlines);
   } catch (err) {
     console.error("GET /api/klines error:", err);
     return NextResponse.json({ error: "Failed to fetch klines" }, { status: 500 });
