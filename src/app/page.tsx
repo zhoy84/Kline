@@ -149,6 +149,8 @@ export default function Home() {
 
   // Recompute events in memory from preview API (no DB write) — fast ~10ms
   const handleRecompute = useCallback(async () => {
+    setRecomputing(true);
+    const originalEvents = [...events]; // 保留当前事件，防止出错时清空
     try {
       const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
       if (!res.ok) throw new Error(`Preview returned ${res.status}`);
@@ -162,8 +164,12 @@ export default function Home() {
       setEvents(coinEvents);
     } catch (err) {
       console.error("Preview error:", err);
+      setEvents(originalEvents); // 出错时恢复原事件
+      alert("计算失败: " + (err as Error).message);
+    } finally {
+      setRecomputing(false);
     }
-  }, [drawdownThreshold, selectedSymbol]);
+  }, [drawdownThreshold, selectedSymbol, events]);
 
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-gray-100">
