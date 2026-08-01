@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       });
     }
     const allDates = Array.from(priceByDate.keys()).sort((a, b) => a - b);
+    const coinIds = coins.map((c) => Number(c.id));
 
     const events: Array<{
       symbol: string;
@@ -31,67 +32,90 @@ export async function GET(request: NextRequest) {
       event_date: string;
       price: number;
       change_pct: number | null;
+      other_prices: Record<string, number>;
     }> = [];
 
+    function otherPrices(dateMs: number, excludeId: number): Record<string, number> {
+      const result: Record<string, number> = {};
+      const day = priceByDate.get(dateMs);
+      if (!day) return result;
+      for (const coinId of coinIds) {
+        if (coinId === excludeId) continue;
+        const p = day.get(coinId);
+        if (p) {
+          const coin = coins.find((c) => Number(c.id) === coinId);
+          if (coin) result[coin.symbol] = p.close;
+        }
+      }
+      return result;
+    }
+
     for (const coin of coins) {
-      const coinDates = allDates.filter((d) => priceByDate.get(d)?.has(coin.id));
+      const coinId = Number(coin.id);
+      const coinSymbol = coin.symbol;
+      const coinDates = allDates.filter((d) => priceByDate.get(d)?.has(coinId));
       let runningHigh = -Infinity;
       let runningLow = Infinity;
       let firstHighSeen = false;
 
       for (const dateMs of coinDates) {
-        const row = priceByDate.get(dateMs)!.get(coin.id)!;
+        const row = priceByDate.get(dateMs)!.get(coinId)!;
         const dateStr = new Date(dateMs).toISOString().split("T")[0];
 
         if (row.high > runningHigh) {
           if (runningHigh > 0) firstHighSeen = true;
           runningHigh = row.high;
           events.push({
-            symbol: coin.symbol,
+            symbol: coinSymbol,
             event_type: "ath",
             direction: "UP",
             event_date: dateStr,
             price: row.high,
             change_pct: null,
+            other_prices: otherPrices(dateMs, coinId),
           });
         }
         if (row.low < runningLow && firstHighSeen) {
           runningLow = row.low;
           events.push({
-            symbol: coin.symbol,
+            symbol: coinSymbol,
             event_type: "atl",
             direction: "DOWN",
             event_date: dateStr,
             price: row.low,
             change_pct: null,
+            other_prices: otherPrices(dateMs, coinId),
           });
         }
       }
 
       for (let i = lookback; i < coinDates.length; ) {
-        const prev = priceByDate.get(coinDates[i - lookback])!.get(coin.id)!;
-        const curr = priceByDate.get(coinDates[i])!.get(coin.id)!;
+        const dateMs = coinDates[i];
+        const prev = priceByDate.get(coinDates[i - lookback])!.get(coinId)!;
+        const curr = priceByDate.get(coinDates[i])!.get(coinId)!;
         const lowChange = ((curr.low - prev.low) / prev.low) * 100;
         const highChange = ((curr.high - prev.high) / prev.high) * 100;
 
         if (lowChange <= -threshold) {
           events.push({
-            symbol: coin.symbol,
+            symbol: coinSymbol,
             event_type: "drawdown",
             direction: "DOWN",
-            event_date: new Date(coinDates[i]).toISOString().split("T")[0],
+            event_date: new Date(dateMs).toISOString().split("T")[0],
             price: curr.low,
             change_pct: Math.round(lowChange * 100) / 100,
+            other_prices: otherPrices(dateMs, coinId),
           });
           i += lookback;
         } else if (highChange >= threshold) {
           events.push({
-            symbol: coin.symbol,
+            symbol: coinSymbol,
             event_type: "drawdown",
             direction: "UP",
-            event_date: new Date(coinDates[i]).toISOString().split("T")[0],
+            event_date: new Date(dateMs).toISOString().split("T")[0],
             price: curr.high,
             change_pct: Math.round(highChange * 100) / 100,
+            other_prices: otherPrices(dateMs, coinId),
           });
           i += lookback;
         } else {
@@ -99,6 +123,9 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+
+    // Sort by event_date DESC (newest first)
+    events.sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
     return NextResponse.json({ events, threshold, lookback });
   } catch (err) {
