@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 interface Props {
   value: number;
-  onChange: (val: number) => void;
+  onChange: (val: string) => void;
   onRecompute: () => void;
   disabled?: boolean;
   recomputing?: boolean;
@@ -21,11 +21,12 @@ export default function DrawdownConfig({ value, onChange, onRecompute, disabled,
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     setInputValue(v);
-    const num = parseInt(v) || 20;
-    onChange(num);  // 输入变化立即触发事件重新计算
+    // 输入变化时只更新显示，不调用 onChange（不会触发重新计算）
   };
 
   const handleRecompute = () => {
+    // 按钮点击时，将当前输入值通知父组件，父组件负责用该值重新计算
+    onChange(inputValue);
     onRecompute();
   };
 

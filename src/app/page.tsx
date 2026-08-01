@@ -42,9 +42,11 @@ export default function Home() {
   const [klines, setKlines] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<NotableEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drawdownThreshold, setDrawdownThreshold] = useState(20); // 默认阈值，不从 localStorage 保存
+  const [drawdownThreshold, setDrawdownThreshold] = useState(20); // 用于计算的阈值
+  const [inputValue, setInputValue] = useState("20"); // 输入框显示的字符串
   const [recomputing, setRecomputing] = useState(false);
   const initialLoadDone = useRef(false);
+  const debounceTimer = useRef<number | null>(null);
 
   // Fetch coins list
   useEffect(() => {
@@ -75,6 +77,7 @@ export default function Home() {
 
   // In-memory event recomputation using preview API
   const computeEvents = useCallback(async (symbol: string, threshold: number) => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/events/preview?threshold=${threshold}&lookback=5`);
       if (!res.ok) throw new Error(`Preview returned ${res.status}`);
@@ -85,23 +88,58 @@ export default function Home() {
     } catch (err) {
       console.error("Compute events failed:", err);
       setEvents([]);
+    } finally {
+      setLoading(false);
     }
-  }, [setEvents]);
+  }, [setEvents, setLoading]);
 
-  // Initial load + symbol change: fetch klines AND compute events with current threshold
+  // 当输入框变化时，先不立即计算，等待用户完成输入
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setInputValue(v);
+    // 清除之前的 timer
+    if (debounceTimer.current !== null) {
+      clearTimeout(debounceTimer.current);
+    }
+    // 500ms 后如果输入是有效数字，则提交并触发计算
+    debounceTimer.current = window.setTimeout(() => {
+      const num = parseInt(v) || 20;
+      setDrawdownThreshold(num);
+      computeEvents(selectedSymbol, num);
+    }, 500);
+  }, [selectedSymbol, computeEvents]);
+
+  // 当输入框失去焦点时，立即提交（不需要等 500ms）
+  const handleInputBlur = useCallback(() => {
+    if (debounceTimer.current !== null) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    const num = parseInt(inputValue) || 20;
+    if (num !== drawdownThreshold) {
+      setDrawdownThreshold(num);
+      computeEvents(selectedSymbol, num);
+    }
+  }, [inputValue, drawdownThreshold, selectedSymbol, computeEvents]);
+
+  // Initial load + symbol change: fetch klines AND compute events with threshold=20
   useEffect(() => {
     if (!selectedSymbol) return;
 
-    // Fetch klines first
+    // 重置阈值和输入为默认
+    setDrawdownThreshold(20);
+    setInputValue("20");
+
+    // Fetch klines
     fetchKlines(selectedSymbol);
 
-    // Then compute events using current threshold
-    computeEvents(selectedSymbol, drawdownThreshold);
+    // Compute events using threshold=20
+    computeEvents(selectedSymbol, 20);
 
     initialLoadDone.current = true;
-  }, [selectedSymbol, fetchKlines, computeEvents, drawdownThreshold]);
+  }, [selectedSymbol, fetchKlines, computeEvents]);
 
-  // Auto-refresh klines every 60 seconds (events are recomputed on threshold change)
+  // Auto-refresh klines every 60 seconds
   useEffect(() => {
     if (!initialLoadDone.current) return;
     const interval = setInterval(() => {
@@ -110,14 +148,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchKlines]);
 
-  // Recompute events when threshold changes
-  const handleThresholdChange = useCallback((val: number) => {
-    setDrawdownThreshold(val);
-    // 阈值变化立即用新阈值重新计算事件（不等待点按钮）
-    computeEvents(selectedSymbol, val);
-  }, [selectedSymbol, computeEvents]);
-
-  // Recompute events with button click (same as threshold change)
+  // Handle recompute button click
   const handleRecompute = useCallback(async () => {
     setRecomputing(true);
     try {
@@ -211,12 +242,31 @@ export default function Home() {
                       selected={selectedSymbol}
                       onSelect={setSelectedSymbol}
                     />
-                    <DrawdownConfig
-                      value={drawdownThreshold}
-                      onChange={handleThresholdChange}
-                      onRecompute={handleRecompute}
-                      recomputing={recomputing}
-                    />
+                    {/* Input box with debounce, submit on blur or after 500ms pause */}
+                    <div className="flex items-center gap-1 text-sm">
+                      <span className="text-gray-400 whitespace-nowrap">阈值</span>
+                      <input
+                        type="number"
+                        min={5}
+                        max={50}
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onBlur={handleInputBlur}
+                        className={`w-14 px-1.5 py-1 rounded text-gray-200 text-center text-sm border transition-colors bg-gray-800 border-gray-700 focus:border-blue-400 focus:outline-none`}
+                      />
+                      <span className="text-gray-500 text-xs">%</span>
+                      <button
+                        onClick={handleRecompute}
+                        disabled={recomputing}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                          recomputing
+                            ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
+                            : "bg-gray-700 text-gray-200 hover:bg-gray-600 active:bg-gray-500"
+                        }`}
+                      >
+                        {recomputing ? "计算中..." : "重新计算"}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
