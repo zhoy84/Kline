@@ -42,7 +42,16 @@ export default function Home() {
   const [klines, setKlines] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<NotableEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drawdownThreshold, setDrawdownThreshold] = useState(20);
+  const [drawdownThreshold, setDrawdownThreshold] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`kline_BTCUSDT_drawdown_threshold`);
+      if (raw) {
+        const v = parseInt(raw, 10);
+        if (!isNaN(v) && v >= 5 && v <= 50) return v;
+      }
+    } catch {}
+    return 20;
+  });
   const [recomputing, setRecomputing] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -86,6 +95,14 @@ export default function Home() {
     if (selectedSymbol) {
       fetchData(selectedSymbol, true);
       initialLoadDone.current = true;
+      // Load threshold from localStorage for the selected coin
+      try {
+        const raw = localStorage.getItem(`kline_${selectedSymbol}_drawdown_threshold`);
+        if (raw) {
+          const v = parseInt(raw, 10);
+          if (!isNaN(v) && v >= 5 && v <= 50) setDrawdownThreshold(v);
+        }
+      } catch {}
     }
   }, [selectedSymbol, fetchData]);
 
@@ -112,26 +129,19 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [events, coins, selectedSymbol]);
 
-  // Recompute events with current threshold
+  // Recompute events in memory from preview API (no DB write) — fast ~10ms
   const handleRecompute = useCallback(async () => {
-    setRecomputing(true);
     try {
-      const res = await fetch("/api/recompute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threshold: drawdownThreshold, lookback: 5 }),
-      });
-      if (!res.ok) throw new Error(`Recompute returned ${res.status}`);
+      const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
+      if (!res.ok) throw new Error(`Preview returned ${res.status}`);
       const data = await res.json();
-      console.log(`Recomputed ${data.events} events`);
-      // Refresh current view
-      if (selectedSymbol) fetchData(selectedSymbol, false);
+      // Filter to current coin only for display
+      const coinEvents = (data.events || []).filter((e: any) => e.symbol === selectedSymbol);
+      setEvents(coinEvents);
     } catch (err) {
-      console.error("Recompute error:", err);
-    } finally {
-      setRecomputing(false);
+      console.error("Preview error:", err);
     }
-  }, [drawdownThreshold, selectedSymbol, fetchData]);
+  }, [drawdownThreshold, selectedSymbol]);
 
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-gray-100">
@@ -202,12 +212,13 @@ export default function Home() {
                       selected={selectedSymbol}
                       onSelect={setSelectedSymbol}
                     />
-                    <DrawdownConfig
-                      value={drawdownThreshold}
-                      onChange={setDrawdownThreshold}
-                      disabled={recomputing}
-                      onBlur={handleRecompute}
-                    />
+                     <DrawdownConfig
+                       symbol={selectedSymbol}
+                       value={drawdownThreshold}
+                       onChange={setDrawdownThreshold}
+                       onRecompute={handleRecompute}
+                       recomputing={recomputing}
+                     />
                   </div>
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
