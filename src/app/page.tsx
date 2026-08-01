@@ -78,9 +78,10 @@ export default function Home() {
     } catch (err) {
       console.error("Fetch klines failed:", err);
     } finally {
+      // 无论成功失败都重置 loading，避免卡住
       setLoading(false);
     }
-  }, []);
+  }, [setLoading, setKlines]);
 
   // Fetch events from DB (the source of truth)
   const fetchEvents = useCallback(async (symbol: string) => {
@@ -93,9 +94,10 @@ export default function Home() {
     } catch (err) {
       console.error("Fetch events failed:", err);
     } finally {
+      // 无论成功失败都重置 loading，避免卡住
       setLoading(false);
     }
-  }, []);
+  }, [setLoading, setEvents]);
 
   // Initial load + symbol change
   useEffect(() => {
