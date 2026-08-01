@@ -81,6 +81,24 @@ export default function Home() {
 
       const klinesData = await klinesRes.json();
       const eventsData = await eventsRes.json();
+
+      // Prefer cached events from localStorage if available (memory-cached from preview)
+      const cachedKey = `kline_${symbol}_events_cached`;
+      try {
+        const cached = localStorage.getItem(cachedKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          // Only use cache if threshold matches current
+          const cachedThreshold = localStorage.getItem(`kline_${symbol}_drawdown_threshold`);
+          if (String(cachedThreshold) === String(drawdownThreshold)) {
+            setKlines(klinesData);
+            setEvents(parsed);
+            if (showLoading) setLoading(false);
+            return;
+          }
+        }
+      } catch {}
+
       setKlines(klinesData);
       setEvents(eventsData);
     } catch (err) {
@@ -88,7 +106,7 @@ export default function Home() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [drawdownThreshold]);
 
   // Initial load + symbol change
   useEffect(() => {
@@ -135,6 +153,10 @@ export default function Home() {
       const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
       if (!res.ok) throw new Error(`Preview returned ${res.status}`);
       const data = await res.json();
+      // Cache for all coins (so switching coins is instant)
+      try {
+        localStorage.setItem(`kline_${selectedSymbol}_events_cached`, JSON.stringify(data.events));
+      } catch {}
       // Filter to current coin only for display
       const coinEvents = (data.events || []).filter((e: any) => e.symbol === selectedSymbol);
       setEvents(coinEvents);
