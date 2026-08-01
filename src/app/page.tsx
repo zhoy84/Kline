@@ -108,17 +108,19 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchKlines]);
 
-  // Handle recompute button click — use current threshold value
-  const handleRecompute = useCallback(async () => {
+  // Handle recompute button click — use the threshold passed from child
+  const handleRecompute = useCallback(async (threshold: number) => {
     setRecomputing(true);
+    // 先更新阈值状态，让输入框显示新值
+    setDrawdownThreshold(threshold);
     try {
-      await computeEvents(selectedSymbol, drawdownThreshold);
+      await computeEvents(selectedSymbol, threshold);
     } catch (err) {
       console.error("Recompute failed:", err);
     } finally {
       setRecomputing(false);
     }
-  }, [selectedSymbol, drawdownThreshold, computeEvents]);
+  }, [selectedSymbol, computeEvents]);
 
   // Export events as downloadable HTML file
   const handleExport = useCallback(() => {
