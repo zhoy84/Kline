@@ -42,8 +42,7 @@ export default function Home() {
   const [klines, setKlines] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<NotableEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drawdownThreshold, setDrawdownThreshold] = useState(20); // 计算用阈值
-  const [inputValue, setInputValue] = useState("20"); // 输入框显示值（独立于计算值）
+  const [drawdownThreshold, setDrawdownThreshold] = useState(20); // 计算阈值
   const [recomputing, setRecomputing] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -94,17 +93,9 @@ export default function Home() {
   // Initial load + symbol change: fetch klines AND compute events with threshold=20
   useEffect(() => {
     if (!selectedSymbol) return;
-
-    // 重置为默认值（完全不依赖 localStorage）
     setDrawdownThreshold(20);
-    setInputValue("20");
-
-    // Fetch klines
     fetchKlines(selectedSymbol);
-
-    // Compute events using threshold=20
     computeEvents(selectedSymbol, 20);
-
     initialLoadDone.current = true;
   }, [selectedSymbol, fetchKlines, computeEvents]);
 
@@ -117,19 +108,17 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchKlines]);
 
-  // Handle recompute button click — 读取当前输入框的值作为阈值
+  // Handle recompute button click — use current threshold value
   const handleRecompute = useCallback(async () => {
     setRecomputing(true);
-    const threshold = parseInt(inputValue) || 20;
-    setDrawdownThreshold(threshold); // 更新计算阈值（用于显示同步）
     try {
-      await computeEvents(selectedSymbol, threshold);
+      await computeEvents(selectedSymbol, drawdownThreshold);
     } catch (err) {
       console.error("Recompute failed:", err);
     } finally {
       setRecomputing(false);
     }
-  }, [selectedSymbol, inputValue, computeEvents]);
+  }, [selectedSymbol, drawdownThreshold, computeEvents]);
 
   // Export events as downloadable HTML file
   const handleExport = useCallback(() => {
@@ -147,7 +136,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-gray-100">
-      {/* Header */}
       <header className="border-b border-gray-800 bg-[#1a1a2e]/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -179,7 +167,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-4">
         {tab === "kline" ? (
           loading ? (
@@ -188,11 +175,9 @@ export default function Home() {
             </div>
           ) : (
             <div className="flex flex-col lg:flex-row gap-4">
-              {/* Chart */}
               <div className="w-full lg:w-[60%] min-h-[300px] lg:min-h-[500px] bg-[#1a1a2e] rounded-lg border border-gray-800">
                 <KlineChart data={klines} />
               </div>
-              {/* Events Table */}
               <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-800 space-y-2">
                   <div className="flex items-center justify-between">
@@ -213,10 +198,10 @@ export default function Home() {
                       selected={selectedSymbol}
                       onSelect={setSelectedSymbol}
                     />
-                    {/* 输入框完全不触发计算 — 只负责显示，必须点按钮才生效 */}
                     <DrawdownConfig
-                      value={inputValue}
+                      value={drawdownThreshold}
                       onRecompute={handleRecompute}
+                      disabled={recomputing}
                       recomputing={recomputing}
                     />
                   </div>
