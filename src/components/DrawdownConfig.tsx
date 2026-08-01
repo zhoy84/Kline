@@ -9,6 +9,7 @@ interface Props {
   onChange: (val: number) => void;
   onRecompute: () => void;
   recomputing?: boolean;
+  onExitPreview?: () => void; // 退出预览
 }
 
 function clamp(v: number): number {
@@ -39,6 +40,7 @@ export default function DrawdownConfig({
   onChange,
   onRecompute,
   recomputing,
+  onExitPreview,
 }: Props) {
   const [displayValue, setDisplayValue] = useState<number>(value);
   const [rawInput, setRawInput] = useState<string>(String(value));
@@ -55,7 +57,6 @@ export default function DrawdownConfig({
     if (!disabled) {
       setIsEditing(true);
       setRawInput(String(displayValue));
-      // focus 后 input 立即获得焦点
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   };
@@ -72,25 +73,17 @@ export default function DrawdownConfig({
       setDisplayValue(v);
       onChange(v);
     } else {
-      // 恢复为 displayValue
       setRawInput(String(displayValue));
     }
   };
 
   const valueToShow = isEditing ? rawInput : String(displayValue);
 
-  const handleChange = (raw: string) => {
-    const v = clamp(parseInt(raw) || 20);
-    store(symbol, v);
-    onChange(v);
-  };
-
   const handleRecompute = () => {
     const rawVal = rawInput.trim();
     const num = rawVal ? parseInt(rawVal) : displayValue;
     const v = clamp(num || displayValue);
     store(symbol, v);
-    // 如果与 displayValue 不同，先更新 displayValue 和触发 onChange
     if (v !== displayValue) {
       setDisplayValue(v);
       onChange(v);
@@ -99,7 +92,7 @@ export default function DrawdownConfig({
   };
 
   return (
-    <div className="flex items-center gap-2 text-sm shrink-0">
+    <div className="flex items-center gap-1 text-sm shrink-0">
       <span className="text-gray-400 whitespace-nowrap">阈值</span>
       <input
         ref={inputRef}
@@ -121,7 +114,7 @@ export default function DrawdownConfig({
       <button
         onClick={handleRecompute}
         disabled={disabled || recomputing}
-        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
           disabled || recomputing
             ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
             : "bg-gray-700 text-gray-200 hover:bg-gray-600 active:bg-gray-500"
@@ -129,6 +122,19 @@ export default function DrawdownConfig({
       >
         {recomputing ? "计算中..." : "重新计算"}
       </button>
+      {onExitPreview && (
+        <button
+          onClick={onExitPreview}
+          disabled={disabled || recomputing}
+          className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+            disabled || recomputing
+              ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
+              : "bg-gray-600 text-gray-200 hover:bg-gray-500"
+          }`}
+        >
+          取消
+        </button>
+      )}
     </div>
   );
 }

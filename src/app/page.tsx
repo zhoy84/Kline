@@ -41,6 +41,8 @@ export default function Home() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
   const [klines, setKlines] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<NotableEvent[]>([]);
+  const [previewEvents, setPreviewEvents] = useState<NotableEvent[]>([]); // 内存预览事件
+  const [isPreviewing, setIsPreviewing] = useState(false); // 是否正在预览模式
   const [loading, setLoading] = useState(true);
   const [drawdownThreshold, setDrawdownThreshold] = useState(() => {
     try {
@@ -67,7 +69,7 @@ export default function Home() {
       .catch((err) => console.error("Coins fetch error:", err));
   }, []);
 
-  // Fetch klines + events when symbol changes
+  // Fetch klines + events from DB (always use DB as source of truth)
   const fetchData = useCallback(async (symbol: string, showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
@@ -82,23 +84,6 @@ export default function Home() {
       const klinesData = await klinesRes.json();
       const eventsData = await eventsRes.json();
 
-      // Prefer cached events from localStorage if available (memory-cached from preview)
-      const cachedKey = `kline_${symbol}_events_cached`;
-      try {
-        const cached = localStorage.getItem(cachedKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          // Only use cache if threshold matches current
-          const cachedThreshold = localStorage.getItem(`kline_${symbol}_drawdown_threshold`);
-          if (String(cachedThreshold) === String(drawdownThreshold)) {
-            setKlines(klinesData);
-            setEvents(parsed);
-            if (showLoading) setLoading(false);
-            return;
-          }
-        }
-      } catch {}
-
       setKlines(klinesData);
       setEvents(eventsData);
     } catch (err) {
@@ -106,7 +91,7 @@ export default function Home() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [drawdownThreshold]);
+  }, []);
 
   // Initial load + symbol change
   useEffect(() => {
@@ -120,6 +105,9 @@ export default function Home() {
           const v = parseInt(raw, 10);
           if (!isNaN(v) && v >= 5 && v <= 50) setDrawdownThreshold(v);
         }
+        // 切换币种时清除预览状态
+        setIsPreviewing(false);
+        setPreviewEvents([]);
       } catch {}
     }
   }, [selectedSymbol, fetchData]);
@@ -150,26 +138,36 @@ export default function Home() {
   // Recompute events in memory from preview API (no DB write) — fast ~10ms
   const handleRecompute = useCallback(async () => {
     setRecomputing(true);
-    const originalEvents = [...events]; // 保留当前事件，防止出错时清空
     try {
       const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
       if (!res.ok) throw new Error(`Preview returned ${res.status}`);
       const data = await res.json();
-      // Cache for all coins (so switching coins is instant)
-      try {
-        localStorage.setItem(`kline_${selectedSymbol}_events_cached`, JSON.stringify(data.events));
-      } catch {}
-      // Filter to current coin only for display
       const coinEvents = (data.events || []).filter((e: any) => e.symbol === selectedSymbol);
-      setEvents(coinEvents);
+      // 进入预览模式：保存当前 events 到 previewEvents，显示 preview 结果
+      setIsPreviewing(true);
+      setPreviewEvents(coinEvents);
+      setEvents(coinEvents); // 显示预览结果
     } catch (err) {
       console.error("Preview error:", err);
-      setEvents(originalEvents); // 出错时恢复原事件
       alert("计算失败: " + (err as Error).message);
     } finally {
       setRecomputing(false);
     }
-  }, [drawdownThreshold, selectedSymbol, events]);
+  }, [drawdownThreshold, selectedSymbol]);
+
+  // 退出预览模式：恢复 DB 事件
+  const exitPreview = useCallback(async () => {
+    setIsPreviewing(false);
+    setPreviewEvents([]);
+    if (selectedSymbol) {
+      // 从 DB 重新获取事件
+      const eventsRes = await fetch(`/api/events?symbol=${selectedSymbol}`);
+      if (eventsRes.ok) {
+        const eventsData = await eventsRes.json();
+        setEvents(eventsData);
+      }
+    }
+  }, [selectedSymbol]);
 
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-gray-100">
@@ -222,31 +220,40 @@ export default function Home() {
               {/* Events Table */}
               <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-gray-300">
-                      历史事件记录
-                      <span className="text-xs text-gray-500 ml-2">({events.length})</span>
-                    </h2>
-                    <button
-                      onClick={handleExport}
-                      className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
-                    >
-                      导出
-                    </button>
-                  </div>
+               <div className="flex items-center justify-between">
+                 <h2 className="text-sm font-semibold text-gray-300">
+                   历史事件记录
+                   <span className="text-xs text-gray-500 ml-2">({events.length})</span>
+                 </h2>
+                 <button
+                   onClick={handleExport}
+                   className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
+                 >
+                   导出
+                 </button>
+                 {isPreviewing && (
+                   <button
+                     onClick={exitPreview}
+                     className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors ml-2"
+                   >
+                     取消预览
+                   </button>
+                 )}
+               </div>
                   <div className="flex items-center gap-2">
                     <CoinSelector
                       coins={coins}
                       selected={selectedSymbol}
                       onSelect={setSelectedSymbol}
                     />
-                     <DrawdownConfig
-                       symbol={selectedSymbol}
-                       value={drawdownThreshold}
-                       onChange={setDrawdownThreshold}
-                       onRecompute={handleRecompute}
-                       recomputing={recomputing}
-                     />
+                      <DrawdownConfig
+                        symbol={selectedSymbol}
+                        value={drawdownThreshold}
+                        onChange={setDrawdownThreshold}
+                        onRecompute={handleRecompute}
+                        recomputing={recomputing}
+                        onExitPreview={exitPreview}
+                      />
                   </div>
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
