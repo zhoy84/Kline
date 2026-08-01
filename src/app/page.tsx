@@ -42,16 +42,7 @@ export default function Home() {
   const [klines, setKlines] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<NotableEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drawdownThreshold, setDrawdownThreshold] = useState(() => {
-    try {
-      const raw = localStorage.getItem(`kline_BTCUSDT_drawdown_threshold`);
-      if (raw) {
-        const v = parseInt(raw, 10);
-        if (!isNaN(v) && v >= 5 && v <= 50) return v;
-      }
-    } catch {}
-    return 20;
-  });
+  const [drawdownThreshold, setDrawdownThreshold] = useState(20); // 默认阈值，不从 localStorage 保存
   const [recomputing, setRecomputing] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -78,47 +69,39 @@ export default function Home() {
     } catch (err) {
       console.error("Fetch klines failed:", err);
     } finally {
-      // 无论成功失败都重置 loading，避免卡住
       setLoading(false);
     }
   }, [setLoading, setKlines]);
 
-  // Fetch events from DB (the source of truth)
-  const fetchEvents = useCallback(async (symbol: string) => {
-    setLoading(true);
+  // In-memory event recomputation using preview API
+  const computeEvents = useCallback(async (symbol: string, threshold: number) => {
     try {
-      const res = await fetch(`/api/events?symbol=${symbol}`);
-      if (!res.ok) throw new Error(`Events API returned ${res.status}`);
+      const res = await fetch(`/api/events/preview?threshold=${threshold}&lookback=5`);
+      if (!res.ok) throw new Error(`Preview returned ${res.status}`);
       const data = await res.json();
-      setEvents(data as NotableEvent[]);
+      // Filter to current coin only
+      const coinEvents = (data.events || []).filter((e: any) => e.symbol === symbol);
+      setEvents(coinEvents);
     } catch (err) {
-      console.error("Fetch events failed:", err);
-    } finally {
-      // 无论成功失败都重置 loading，避免卡住
-      setLoading(false);
+      console.error("Compute events failed:", err);
+      setEvents([]);
     }
-  }, [setLoading, setEvents]);
+  }, [setEvents]);
 
-  // Initial load + symbol change
+  // Initial load + symbol change: fetch klines AND compute events with current threshold
   useEffect(() => {
     if (!selectedSymbol) return;
 
-    // Load threshold from localStorage for the selected coin
-    try {
-      const raw = localStorage.getItem(`kline_${selectedSymbol}_drawdown_threshold`);
-      if (raw) {
-        const v = parseInt(raw, 10);
-        if (!isNaN(v) && v >= 5 && v <= 50) setDrawdownThreshold(v);
-      }
-    } catch {}
-
-    // Fetch klines and events
+    // Fetch klines first
     fetchKlines(selectedSymbol);
-    fetchEvents(selectedSymbol);
-    initialLoadDone.current = true;
-  }, [selectedSymbol]);
 
-  // Auto-refresh klines every 60 seconds
+    // Then compute events using current threshold
+    computeEvents(selectedSymbol, drawdownThreshold);
+
+    initialLoadDone.current = true;
+  }, [selectedSymbol, fetchKlines, computeEvents, drawdownThreshold]);
+
+  // Auto-refresh klines every 60 seconds (events are recomputed on threshold change)
   useEffect(() => {
     if (!initialLoadDone.current) return;
     const interval = setInterval(() => {
@@ -127,26 +110,26 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [selectedSymbol, fetchKlines]);
 
-  // Recompute events from preview API (no DB write) — fast ~10ms
-  // When clicked, events are overridden until next page reload or symbol switch
+  // Recompute events when threshold changes
+  const handleThresholdChange = useCallback((val: number) => {
+    setDrawdownThreshold(val);
+    // 阈值变化立即用新阈值重新计算事件（不等待点按钮）
+    computeEvents(selectedSymbol, val);
+  }, [selectedSymbol, computeEvents]);
+
+  // Recompute events with button click (same as threshold change)
   const handleRecompute = useCallback(async () => {
     setRecomputing(true);
     try {
-      const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
-      if (!res.ok) throw new Error(`Preview returned ${res.status}`);
-      const data = await res.json();
-      // Filter to current coin only for display
-      const coinEvents = (data.events || []).filter((e: any) => e.symbol === selectedSymbol);
-      setEvents(coinEvents);
+      await computeEvents(selectedSymbol, drawdownThreshold);
     } catch (err) {
-      console.error("Preview error:", err);
-      alert("计算失败: " + (err as Error).message);
+      console.error("Recompute failed:", err);
     } finally {
       setRecomputing(false);
     }
-  }, [drawdownThreshold, selectedSymbol]);
+  }, [selectedSymbol, drawdownThreshold, computeEvents]);
 
-  // Export events as downloadable HTML file (use current events state)
+  // Export events as downloadable HTML file
   const handleExport = useCallback(() => {
     const html = exportEventsAsHtml(events, coins, selectedSymbol);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -228,16 +211,12 @@ export default function Home() {
                       selected={selectedSymbol}
                       onSelect={setSelectedSymbol}
                     />
-                     <DrawdownConfig
-                       symbol={selectedSymbol}
-                       value={drawdownThreshold}
-                       onChange={(v) => {
-                         setDrawdownThreshold(v);
-                         localStorage.setItem(`kline_${selectedSymbol}_drawdown_threshold`, String(v));
-                       }}
-                       onRecompute={handleRecompute}
-                       recomputing={recomputing}
-                     />
+                    <DrawdownConfig
+                      value={drawdownThreshold}
+                      onChange={handleThresholdChange}
+                      onRecompute={handleRecompute}
+                      recomputing={recomputing}
+                    />
                   </div>
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>

@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 
 interface Props {
-  symbol: string;
   value: number;
   onChange: (val: number) => void;
   onRecompute: () => void;
@@ -11,7 +10,7 @@ interface Props {
   recomputing?: boolean;
 }
 
-export default function DrawdownConfig({ symbol, value, onChange, onRecompute, disabled, recomputing }: Props) {
+export default function DrawdownConfig({ value, onChange, onRecompute, disabled, recomputing }: Props) {
   const [inputValue, setInputValue] = useState(String(value));
 
   // 当 value 变化（例如切换币种加载）时同步输入框
@@ -23,7 +22,7 @@ export default function DrawdownConfig({ symbol, value, onChange, onRecompute, d
     const v = e.target.value;
     setInputValue(v);
     const num = parseInt(v) || 20;
-    onChange(num);  // 即时更新阈值状态（但不触发重新计算）
+    onChange(num);  // 输入变化立即触发事件重新计算
   };
 
   const handleRecompute = () => {
