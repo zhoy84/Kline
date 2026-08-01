@@ -3,31 +3,30 @@
 import { useState, useEffect } from "react";
 
 interface Props {
-  value: number;
-  onChange: (val: string) => void;
-  onRecompute: () => void;
+  value: string; // 输入框显示的字符串值
+  onRecompute: (threshold: number) => void; // 按钮点击时调用，传入解析后的数字阈值
   disabled?: boolean;
   recomputing?: boolean;
 }
 
-export default function DrawdownConfig({ value, onChange, onRecompute, disabled, recomputing }: Props) {
-  const [inputValue, setInputValue] = useState(String(value));
+export default function DrawdownConfig({ value, onRecompute, disabled, recomputing }: Props) {
+  // 输入框的本地显示值，与父组件完全隔离
+  const [inputValue, setInputValue] = useState(value);
 
-  // 当 value 变化（例如切换币种加载）时同步输入框
+  // 当父组件的 value 变化时（例如切换币种重置为"20"），同步输入框
   useEffect(() => {
-    setInputValue(String(value));
+    setInputValue(value);
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
-    setInputValue(v);
-    // 输入变化时只更新显示，不调用 onChange（不会触发重新计算）
+    // 只在本地更新显示，完全不通知父组件
+    setInputValue(e.target.value);
   };
 
   const handleRecompute = () => {
-    // 按钮点击时，将当前输入值通知父组件，父组件负责用该值重新计算
-    onChange(inputValue);
-    onRecompute();
+    // 只有按钮点击时，才从输入框读取值并调用父组件
+    const threshold = parseInt(inputValue) || 20;
+    onRecompute(threshold);
   };
 
   return (
