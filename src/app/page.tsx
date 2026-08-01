@@ -41,8 +41,6 @@ export default function Home() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
   const [klines, setKlines] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<NotableEvent[]>([]);
-  const [previewEvents, setPreviewEvents] = useState<NotableEvent[]>([]); // 内存预览事件
-  const [isPreviewing, setIsPreviewing] = useState(false); // 是否正在预览模式
   const [loading, setLoading] = useState(true);
   const [drawdownThreshold, setDrawdownThreshold] = useState(() => {
     try {
@@ -69,59 +67,78 @@ export default function Home() {
       .catch((err) => console.error("Coins fetch error:", err));
   }, []);
 
-  // Fetch klines + events from DB (always use DB as source of truth)
-  const fetchData = useCallback(async (symbol: string, showLoading = false) => {
-    if (showLoading) setLoading(true);
+  // Fetch klines from DB (events from DB or preview override)
+  const fetchKlines = useCallback(async (symbol: string) => {
     try {
-      const [klinesRes, eventsRes] = await Promise.all([
-        fetch(`/api/klines?symbol=${symbol}&limit=2000`),
-        fetch(`/api/events?symbol=${symbol}`),
-      ]);
-
-      if (!klinesRes.ok) throw new Error(`API /api/klines returned ${klinesRes.status}`);
-      if (!eventsRes.ok) throw new Error(`API /api/events returned ${eventsRes.status}`);
-
-      const klinesData = await klinesRes.json();
-      const eventsData = await eventsRes.json();
-
-      setKlines(klinesData);
-      setEvents(eventsData);
+      const res = await fetch(`/api/klines?symbol=${symbol}&limit=2000`);
+      if (!res.ok) throw new Error(`Klines API returned ${res.status}`);
+      const data = await res.json();
+      setKlines(data);
     } catch (err) {
-      console.error("Fetch error:", err);
-    } finally {
-      if (showLoading) setLoading(false);
+      console.error("Fetch klines failed:", err);
+    }
+  }, []);
+
+  // Fetch events from DB (the source of truth)
+  const fetchEvents = useCallback(async (symbol: string) => {
+    try {
+      const res = await fetch(`/api/events?symbol=${symbol}`);
+      if (!res.ok) throw new Error(`Events API returned ${res.status}`);
+      const data = await res.json();
+      setEvents(data as NotableEvent[]);
+    } catch (err) {
+      console.error("Fetch events failed:", err);
     }
   }, []);
 
   // Initial load + symbol change
   useEffect(() => {
-    if (selectedSymbol) {
-      fetchData(selectedSymbol, true);
-      initialLoadDone.current = true;
-      // Load threshold from localStorage for the selected coin
-      try {
-        const raw = localStorage.getItem(`kline_${selectedSymbol}_drawdown_threshold`);
-        if (raw) {
-          const v = parseInt(raw, 10);
-          if (!isNaN(v) && v >= 5 && v <= 50) setDrawdownThreshold(v);
-        }
-        // 切换币种时清除预览状态
-        setIsPreviewing(false);
-        setPreviewEvents([]);
-      } catch {}
-    }
-  }, [selectedSymbol, fetchData]);
+    if (!selectedSymbol) return;
 
-  // Auto-refresh every 60 seconds (no loading spinner)
+    // Load threshold from localStorage for the selected coin
+    try {
+      const raw = localStorage.getItem(`kline_${selectedSymbol}_drawdown_threshold`);
+      if (raw) {
+        const v = parseInt(raw, 10);
+        if (!isNaN(v) && v >= 5 && v <= 50) setDrawdownThreshold(v);
+      }
+    } catch {}
+
+    // Fetch klines and events
+    fetchKlines(selectedSymbol);
+    fetchEvents(selectedSymbol);
+    initialLoadDone.current = true;
+  }, [selectedSymbol]);
+
+  // Auto-refresh klines every 60 seconds
   useEffect(() => {
     if (!initialLoadDone.current) return;
     const interval = setInterval(() => {
-      if (selectedSymbol) fetchData(selectedSymbol, false);
+      if (selectedSymbol) fetchKlines(selectedSymbol);
     }, 60000);
     return () => clearInterval(interval);
-  }, [selectedSymbol, fetchData]);
+  }, [selectedSymbol, fetchKlines]);
 
-  // Export events as downloadable HTML file
+  // Recompute events from preview API (no DB write) — fast ~10ms
+  // When clicked, events are overridden until next page reload or symbol switch
+  const handleRecompute = useCallback(async () => {
+    setRecomputing(true);
+    try {
+      const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
+      if (!res.ok) throw new Error(`Preview returned ${res.status}`);
+      const data = await res.json();
+      // Filter to current coin only for display
+      const coinEvents = (data.events || []).filter((e: any) => e.symbol === selectedSymbol);
+      setEvents(coinEvents);
+    } catch (err) {
+      console.error("Preview error:", err);
+      alert("计算失败: " + (err as Error).message);
+    } finally {
+      setRecomputing(false);
+    }
+  }, [drawdownThreshold, selectedSymbol]);
+
+  // Export events as downloadable HTML file (use current events state)
   const handleExport = useCallback(() => {
     const html = exportEventsAsHtml(events, coins, selectedSymbol);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -135,49 +152,15 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [events, coins, selectedSymbol]);
 
-  // Recompute events in memory from preview API (no DB write) — fast ~10ms
-  const handleRecompute = useCallback(async () => {
-    setRecomputing(true);
-    try {
-      const res = await fetch(`/api/events/preview?threshold=${drawdownThreshold}&lookback=5`);
-      if (!res.ok) throw new Error(`Preview returned ${res.status}`);
-      const data = await res.json();
-      const coinEvents = (data.events || []).filter((e: any) => e.symbol === selectedSymbol);
-      // 进入预览模式：保存当前 events 到 previewEvents，显示 preview 结果
-      setIsPreviewing(true);
-      setPreviewEvents(coinEvents);
-      setEvents(coinEvents); // 显示预览结果
-    } catch (err) {
-      console.error("Preview error:", err);
-      alert("计算失败: " + (err as Error).message);
-    } finally {
-      setRecomputing(false);
-    }
-  }, [drawdownThreshold, selectedSymbol]);
-
-  // 退出预览模式：恢复 DB 事件
-  const exitPreview = useCallback(async () => {
-    setIsPreviewing(false);
-    setPreviewEvents([]);
-    if (selectedSymbol) {
-      // 从 DB 重新获取事件
-      const eventsRes = await fetch(`/api/events?symbol=${selectedSymbol}`);
-      if (eventsRes.ok) {
-        const eventsData = await eventsRes.json();
-        setEvents(eventsData);
-      }
-    }
-  }, [selectedSymbol]);
-
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-gray-100">
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#1a1a2e]/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-              <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                K-line Lab
-              </h1>
+            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              K-line Lab
+            </h1>
             <span className="text-xs text-gray-500 hidden sm:inline">2020 ~ Now</span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
@@ -199,7 +182,6 @@ export default function Home() {
                 质押策略器
               </button>
             </div>
-
           </div>
         </div>
       </header>
@@ -220,40 +202,34 @@ export default function Home() {
               {/* Events Table */}
               <div className="w-full lg:w-[40%] bg-[#1a1a2e] rounded-lg border border-gray-800 overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-800 space-y-2">
-               <div className="flex items-center justify-between">
-                 <h2 className="text-sm font-semibold text-gray-300">
-                   历史事件记录
-                   <span className="text-xs text-gray-500 ml-2">({events.length})</span>
-                 </h2>
-                 <button
-                   onClick={handleExport}
-                   className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
-                 >
-                   导出
-                 </button>
-                 {isPreviewing && (
-                   <button
-                     onClick={exitPreview}
-                     className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors ml-2"
-                   >
-                     取消预览
-                   </button>
-                 )}
-               </div>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-300">
+                      历史事件记录
+                      <span className="text-xs text-gray-500 ml-2">({events.length})</span>
+                    </h2>
+                    <button
+                      onClick={handleExport}
+                      className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      导出
+                    </button>
+                  </div>
                   <div className="flex items-center gap-2">
                     <CoinSelector
                       coins={coins}
                       selected={selectedSymbol}
                       onSelect={setSelectedSymbol}
                     />
-                      <DrawdownConfig
-                        symbol={selectedSymbol}
-                        value={drawdownThreshold}
-                        onChange={setDrawdownThreshold}
-                        onRecompute={handleRecompute}
-                        recomputing={recomputing}
-                        onExitPreview={exitPreview}
-                      />
+                     <DrawdownConfig
+                       symbol={selectedSymbol}
+                       value={drawdownThreshold}
+                       onChange={(v) => {
+                         setDrawdownThreshold(v);
+                         localStorage.setItem(`kline_${selectedSymbol}_drawdown_threshold`, String(v));
+                       }}
+                       onRecompute={handleRecompute}
+                       recomputing={recomputing}
+                     />
                   </div>
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
@@ -269,4 +245,3 @@ export default function Home() {
     </div>
   );
 }
-
